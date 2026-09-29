@@ -75,11 +75,15 @@ class PreprocessingReport:
     settings: dict = field(default_factory=dict)
 
     def summary(self):
-        lines = ["node      discretizer                    score    lag budget  storage  flags"]
-        for n in self.nodes:
-            desc = ", ".join(f"{k}={v}" for k, v in n.chosen.items() if k not in ("score", "se", "alphabet"))
+        descs = [
+            ", ".join(f"{k}={v}" for k, v in n.chosen.items() if k not in ("score", "se", "alphabet"))
+            for n in self.nodes
+        ]
+        width = max([len("discretizer"), *map(len, descs)])
+        lines = [f"{'node':<8}  {'discretizer':<{width}}  {'score':>6}  {'lag budget':>10}  {'storage':>7}  flags"]
+        for n, desc in zip(self.nodes, descs, strict=True):
             lines.append(
-                f"{n.name:<8}  {desc:<30}  {n.chosen.get('score', 0):6.3f}  {n.lag_budget:10d}  "
+                f"{n.name:<8}  {desc:<{width}}  {n.chosen.get('score', 0):6.3f}  {n.lag_budget:10d}  "
                 f"{n.storage:7.3f}  {','.join(n.flags)}"
             )
         return "\n".join(lines)
