@@ -12,8 +12,17 @@ Uncertainty and significance for the flow layers of one edge.
   in which :math:`X \\perp Y \\mid \\bar W` under the minimizing channel :math:`Q` (so
   its intrinsic flow is zero) while the (X, W̄) and (Y, W̄) marginals are kept.
   Counts are resampled from :math:`p_0` and re-estimated.
-* The synergistic and shared layers are tested by the bootstrap: the p-value is
-  the fraction of resamples at or below zero.
+* The synergistic layer is tested against surrogates in which the context is
+  permuted within strata of its hard clustering under the minimizing channel:
+  (Y, X) then depends on W only through W̄, which keeps the intrinsic flow at the
+  observed magnitude and removes synergy.
+* The shared layer is tested against unconditional permutations of the context,
+  which keep the time-delayed mutual information but make W independent of (Y, X),
+  removing shared flow.
+
+Every null uses the same bias-corrected estimator as the observed statistic, and
+the bootstrap is used only for intervals (a bootstrap cannot test a layer that
+sits on its zero boundary).
 """
 
 from dataclasses import dataclass, field
@@ -74,6 +83,19 @@ def _layers_on_table(table, mapping, n_clusters, estimator, initial, prng):
     return {"te": te, "tdmi": tdmi, "intrinsic": iif, "synergistic": syn, "shared": shared}
 
 
+def _upper_pvalue(null, value):
+    null = np.asarray(null)
+    return float((1 + np.sum(null >= value - 1e-12)) / (1 + len(null)))
+
+
+def _within_strata(x, strata, rng):
+    grouped = np.argsort(strata, kind="stable")
+    shuffled = np.lexsort((rng.random(len(strata)), strata))
+    out = np.empty_like(x)
+    out[grouped] = x[shuffled]
+    return out
+
+
 def _null_projection(merged, Q):
     """
     The closest joint with zero intrinsic flow under channel Q (see module docs).
@@ -114,7 +136,7 @@ def layer_statistics(
     n_boot : int
         Stationary-bootstrap resamples of the aligned tuples.
     n_null : int
-        Parametric-null resamples for the intrinsic layer.
+        Null resamples per layer (parametric for intrinsic, permutations for the others).
     confidence : float
         Coverage of the intervals.
     mean_block_length : float, None
@@ -156,19 +178,30 @@ def layer_statistics(
             shift = point[k] - observed[k]
             low, high = np.quantile(s, [tail, 1 - tail]) + shift
             stats.ci[k] = (max(float(low), 0.0), max(float(high), 0.0))
-        for k in ("synergistic", "shared"):
-            s = np.asarray(samples[k])
-            stats.pvalue[k] = float((1 + np.sum(s <= _EPS)) / (1 + n_boot))
     if n_null:
+        # Intrinsic: parametric projection onto zero intrinsic flow.
         p0 = _null_projection(merged, Q)
         null = []
-        counts_shape = merged.shape
         for _ in range(n_null):
-            table = rng.multinomial(int(merged.sum()), p0.ravel()).reshape(counts_shape).astype(float)
+            table = rng.multinomial(int(merged.sum()), p0.ravel()).reshape(merged.shape).astype(float)
             null.append(_layers_on_table(table, np.arange(n_clusters), n_clusters, estimator, Q, rng)["intrinsic"])
-        null = np.asarray(null)
-        value = observed["intrinsic"]
-        stats.pvalue["intrinsic"] = float((1 + np.sum(null >= value - 1e-12)) / (1 + n_null))
+        stats.pvalue["intrinsic"] = _upper_pvalue(null, observed["intrinsic"])
+        # Synergistic: permute the context within strata of its hard clustering under
+        # the minimizing channel. (Y, X) then depends on W only through that clustering,
+        # so the flow routed through W-bar (the intrinsic flow) is kept and the synergy
+        # carried by W's finer detail is removed.
+        hard = np.argmax(Q, axis=1)[mapping[w]]
+        # Shared: an unconditional permutation of the context makes W independent of
+        # (Y, X), keeping the TDMI while removing shared (and synergistic) flow.
+        for layer, permute in (
+            ("synergistic", lambda: _within_strata(w, hard, rng)),
+            ("shared", lambda: w[rng.permutation(len(w))]),
+        ):
+            null = []
+            for _ in range(n_null):
+                table = joint_table(y, x, permute(), shape)
+                null.append(_layers_on_table(table, mapping, n_clusters, estimator, Q, rng)[layer])
+            stats.pvalue[layer] = _upper_pvalue(null, observed[layer])
     return stats
 
 

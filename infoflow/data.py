@@ -122,6 +122,33 @@ class DiscreteData:
             discretizers=["identity"] * P,
         )
 
+    def split_time(self, fraction=0.5):
+        """
+        Split every trial in time: (first `fraction` of each trial, the rest).
+
+        Offsets are kept, so the second part's first samples are undefined until
+        its windows fill; use it with :func:`realizations` as usual.
+        """
+
+        def part(arrays, lo, hi):
+            return [a[:, int(lo * a.shape[1]) : int(hi * a.shape[1])] for a in arrays]
+
+        def make(lo, hi):
+            return DiscreteData(
+                past=part(self.past, lo, hi),
+                present=part(self.present, lo, hi),
+                past_offset=self.past_offset,
+                present_offset=self.present_offset,
+                past_alphabet=self.past_alphabet,
+                present_alphabet=self.present_alphabet,
+                lag_step=self.lag_step,
+                names=self.names,
+                discretizers=self.discretizers,
+                raw=None if self.raw is None else [r[int(lo * len(r)) : int(hi * len(r))] for r in self.raw],
+            )
+
+        return make(0.0, fraction), make(fraction, 1.0)
+
     def subset_trials(self, indices):
         """
         A copy restricted to the given trials.
