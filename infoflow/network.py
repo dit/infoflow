@@ -167,7 +167,7 @@ def infer_multiplex(
     data,
     names=None,
     embeddings=None,
-    max_lag=3,
+    max_lag=None,
     preprocess="auto",
     estimator="miller_madow",
     alpha=0.05,
@@ -195,8 +195,9 @@ def infer_multiplex(
     embeddings : Embedding or list of Embedding, None
         Candidate lag grids; by default the preprocessing lag budgets, or
         ``Embedding(max_lag)``.
-    max_lag : int
-        Default lag budget when none is chosen by preprocessing.
+    max_lag : int, None
+        Lag budget when none is chosen by preprocessing (default 3), and an upper
+        bound on the budgets that preprocessing chooses.
     preprocess : 'auto', dict, or None
         ``'auto'`` preprocesses float data with :func:`~infoflow.preprocess.preprocess`;
         a dict passes options to it; None treats values as symbols.
@@ -234,7 +235,7 @@ def infer_multiplex(
     names = discrete.names if names is None else list(names)
     discrete.names = names
     if embeddings is None:
-        embeddings = chosen if chosen is not None else Embedding(max_lag=max_lag)
+        embeddings = chosen if chosen is not None else Embedding(max_lag=max_lag or 3)
     settings = skeleton_settings or SkeletonSettings()
     selection_data, estimation_data = (discrete, discrete) if holdout is None else discrete.split_time(holdout)
     skeleton = infer_skeleton(selection_data, embeddings, targets, settings, rng, map_fn=map_fn)

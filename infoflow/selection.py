@@ -6,8 +6,10 @@ transfer entropy :cite:`Lizier2012,Novelli2019`, with two additions:
 
 1. Greedily add the target's own past variables while the best candidate passes a
    *maximum statistic* test against surrogates.
-2. Greedily add source variables the same way. If single-variable additions stop,
-   a *synergy-aware pair search* tests pairs of remaining source variables jointly,
+2. Greedily add source variables the same way, then re-test the unselected target
+   lags given the selected sources (a target lag can be informative only jointly
+   with a source, e.g. ``y_t = x_{t-1} xor y_{t-1}``). If single-variable additions
+   stop, a *synergy-aware pair search* tests pairs of remaining variables jointly,
    which recovers parents that act only together (e.g. ``Y = X1 xor X2``, where
    each alone carries no information).
 3. Prune source variables with a *minimum statistic* test.
@@ -72,6 +74,7 @@ class SkeletonSettings:
     faes: bool = False
     synergy_search: bool = True
     max_pair_candidates: int = 20
+    max_source_lag: int | None = None
     n_perm_pairs: int = 100
     alpha_pairs: float = 0.05
     tdmi_screen: bool = True
@@ -345,6 +348,19 @@ def _sequential(cols, sources, cond, n_perm, alpha, perm):
     return pvalues
 
 
+def _max_budget(embeddings, P):
+    if isinstance(embeddings, (list, tuple)):
+        return max(int(e.max_lag) for e in embeddings)
+    return int(embeddings.max_lag)
+
+
+def _source_lags(data, embeddings, process, max_lag):
+    from dataclasses import replace
+
+    embedding = embeddings[process] if isinstance(embeddings, (list, tuple)) else embeddings
+    return replace(embedding, max_lag=max(max_lag, embedding.max_lag)).lags(int(data.lag_step[process]))
+
+
 def select_parents(data, target, embeddings=None, sources=None, settings=None, prng=None):
     """
     Select the target's past and its source parents.
@@ -371,7 +387,11 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     P = data.n_processes
     sources = [p for p in range(P) if p != target] if sources is None else list(sources)
     target_cands = [(target, lag) for lag in candidate_lags(data, embeddings, target)]
-    source_cands = [(p, lag) for p in sources for lag in candidate_lags(data, embeddings, p)]
+    # Coupling delays can exceed a source's own memory, so source lags extend to
+    # max_source_lag (IDTxl's max_lag_sources; default the larger of 5 and the largest
+    # lag budget in the network), on each source's own grid.
+    source_max = settings.max_source_lag or max(5, _max_budget(embeddings, P))
+    source_cands = [(p, lag) for p in sources for lag in _source_lags(data, embeddings, p, source_max)]
     conditionals = [tuple(v) for v in settings.forced_conditionals]
     if settings.faes:
         conditionals += [(p, 0) for p in sources if (p, 0) not in conditionals]
@@ -384,21 +404,40 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     perm = _permuter(cols, settings, rng)
 
     past = _greedy(cols, target_cands, conditionals, settings.n_perm_max_stat, settings.alpha_max_stat, perm)
-    base = conditionals + past
     selected = []
     remaining = list(source_cands)
     for _ in range(4):
-        new = _greedy(cols, remaining, base + selected, settings.n_perm_max_stat, settings.alpha_max_stat, perm)
+        new = _greedy(
+            cols, remaining, conditionals + past + selected, settings.n_perm_max_stat, settings.alpha_max_stat, perm
+        )
         selected += new
         remaining = [v for v in remaining if v not in selected]
-        if not settings.synergy_search or len(remaining) < 2:
+        # The target's own past can act only jointly with a source (e.g.
+        # y_t = x_{t-1} xor y_{t-1}): re-test unselected target lags given the sources.
+        more = _greedy(
+            cols,
+            [v for v in target_cands if v not in past],
+            conditionals + past + selected,
+            settings.n_perm_max_stat,
+            settings.alpha_max_stat,
+            perm,
+        )
+        past += more
+        if more:
+            continue
+        if not settings.synergy_search:
             break
-        pair = _pair_search(cols, remaining, base + selected, settings, perm)
+        pool = remaining + [v for v in target_cands if v not in past]
+        if len(pool) < 2:
+            break
+        pair = _pair_search(cols, pool, conditionals + past + selected, settings, perm)
         if pair is None:
             break
-        selected += list(pair)
+        for v in pair:
+            (past if v[0] == target else selected).append(v)
         result.pairs.append(pair)
         remaining = [v for v in remaining if v not in pair]
+    base = conditionals + past
 
     if selected:
         selected = _prune(cols, selected, base, settings.n_perm_min_stat, settings.alpha_min_stat, perm)

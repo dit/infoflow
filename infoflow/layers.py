@@ -202,6 +202,11 @@ def layer_statistics(
                 table = joint_table(y, x, permute(), shape)
                 null.append(_layers_on_table(table, mapping, n_clusters, estimator, Q, rng)[layer])
             stats.pvalue[layer] = _upper_pvalue(null, observed[layer])
+    # A layer whose cross-fitted estimate is zero cannot be declared positive.
+    point = flow.as_dict()
+    for layer in LAYERS:
+        if layer in stats.pvalue and point[layer] <= _EPS:
+            stats.pvalue[layer] = 1.0
     return stats
 
 
