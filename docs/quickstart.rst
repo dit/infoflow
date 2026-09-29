@@ -13,11 +13,12 @@ Infer a network from a (time, process) array, or a list of such arrays (trials):
     import infoflow
     from infoflow import datasets
 
-    data = datasets.common_driver(4000, seed=0)  # Z drives both X and Y
-    net = infoflow.infer_multiplex(data, names=["Z", "X", "Y"], prng=0)
+    data = datasets.common_driver(4000, seed=0)  # columns (x, y, z); z drives x and y
+    net = infoflow.infer_multiplex(data, names=["X", "Y", "Z"], prng=0)
     print(net.summary())
+    # Z -> X and Z -> Y are intrinsic; X -> Y appears only as shared flow.
 
-    net.layer("intrinsic")   # xarray.DataArray (source, target) of significant weights
+    net.layer("intrinsic")   # networkx.DiGraph of the significant intrinsic edges
     net.dataset              # every estimate, CI, p- and q-value, role, and flag
     graph = net.to_networkx()
 
@@ -32,5 +33,5 @@ Transfer entropy on its own (moved here from ``dit``):
 
     from infoflow import transfer_entropy, transfer_entropy_test
 
-    te = transfer_entropy(source, target, k=2, l=1)
-    test = transfer_entropy_test(source, target, k=2, l=1, n_perm=500)
+    te = transfer_entropy(source, target, history_length=2, source_history=1)
+    test = transfer_entropy_test(source, target, history_length=2, null="whittle", n_surrogates=499)
