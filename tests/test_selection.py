@@ -2,6 +2,9 @@
 Tests for skeleton inference.
 """
 
+import dataclasses
+from typing import Any
+
 import numpy as np
 import pytest
 
@@ -10,7 +13,7 @@ from infoflow.embedding import Embedding
 from infoflow.preprocess import Ordinal, discretize
 from infoflow.selection import SkeletonSettings, check_n_perm, infer_skeleton, select_parents
 
-FAST = dict(
+FAST: dict[str, Any] = dict(
     n_perm_max_stat=50,
     n_perm_min_stat=50,
     n_perm_omnibus=100,
@@ -65,7 +68,7 @@ def test_target_past_selected():
 def test_tdmi_screen_finds_indirect_dependence():
     data = DiscreteData.from_discrete(_chain(3000, np.random.default_rng(3)))
     result = infer_skeleton(
-        data, Embedding(max_lag=3), settings=SkeletonSettings(**{**FAST, "n_perm_tdmi": 200}), prng=0
+        data, Embedding(max_lag=3), settings=dataclasses.replace(SkeletonSettings(**FAST), n_perm_tdmi=200), prng=0
     )
     candidate = result[2].tdmi_candidates[0]
     assert candidate["variable"] == (0, 3)

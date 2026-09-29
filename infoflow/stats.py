@@ -9,7 +9,7 @@ import numpy as np
 from dit.inference import stationary_bootstrap, total_correlation_ksg
 from dit.inference._symbols import as_generator, is_trials
 from dit.inference.estimators import _check_joint, _cmi_codes, _dense
-from scipy.spatial import cKDTree
+from scipy.spatial import KDTree
 
 __all__ = (
     "SurrogateTest",
@@ -204,7 +204,7 @@ def _local_permutation(x, z, k_perm, rng):
     if z.shape[1] == 0:
         return x[rng.permutation(n)]
     k_perm = min(k_perm, n)
-    neighbors = cKDTree(z).query(z, k_perm, p=np.inf)[1].reshape(n, -1)
+    neighbors = KDTree(z).query(z, k_perm, p=np.inf)[1].reshape(n, -1)
     used = np.zeros(n, dtype=bool)
     choice = np.empty(n, dtype=np.int64)
     for i in rng.permutation(n):

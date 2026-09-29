@@ -61,6 +61,8 @@ def test_compare_between_dependent():
 
 @pytest.mark.parametrize("make_map", [thread_map, dask_map])
 def test_parallel_matches_serial(make_map):
+    if make_map is dask_map:
+        pytest.importorskip("dask")
     data = datasets.chain(1500, seed=0)
     serial = infer_multiplex(data, max_lag=3, skeleton_settings=FAST, n_boot=20, n_null=20, prng=0)
     parallel = infer_multiplex(data, max_lag=3, skeleton_settings=FAST, n_boot=20, n_null=20, map_fn=make_map(), prng=0)

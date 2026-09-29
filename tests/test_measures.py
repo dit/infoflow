@@ -54,7 +54,8 @@ def test_exact_merging_preserves_intrinsic(args, copies):
     mapping = merge_contexts_exact(expanded)
     assert mapping.max() + 1 <= p.shape[2]
     merged = apply_merge(expanded, mapping)
-    assert intrinsic_flow(merged, prng=0)[0] == pytest.approx(intrinsic_flow(expanded, prng=0)[0], abs=1e-4)
+    merged_iif = intrinsic_flow(merged, restarts=20, prng=0)[0]
+    assert merged_iif == pytest.approx(intrinsic_flow(expanded, restarts=20, prng=0)[0], abs=1e-4)
     assert cmi_from_joint(merged) == pytest.approx(cmi_from_joint(expanded), abs=1e-9)
 
 

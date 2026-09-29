@@ -158,9 +158,9 @@ def transfer_entropy(
     te : float
     """
     k, l, lag = _resolve_te(target, history_length, source_history, lag, max_history, prng)
-    codes = _te_codes(source, target, k, l, lag, conditions)
-    _check_joint(*codes)
-    return _cmi_codes(*codes, estimator)
+    source_past, present, context = _te_codes(source, target, k, l, lag, conditions)
+    _check_joint(source_past, present, context)
+    return _cmi_codes(source_past, present, context, estimator)
 
 
 def transfer_entropy_test(
@@ -246,7 +246,10 @@ def transfer_entropy_test(
         surrogates = block_surrogates(source, block_length, n=n_surrogates, prng=rng)
     else:
         raise ValueError(f"Unknown null {null!r}.")
-    null_values = [_cmi_codes(*_te_codes(s, target, k, l, lag, conditions), estimator) for s in surrogates]
+    null_values = []
+    for s in surrogates:
+        s_past, s_present, s_context = _te_codes(s, target, k, l, lag, conditions)
+        null_values.append(_cmi_codes(s_past, s_present, s_context, estimator))
     return _result(value, np.array(null_values), n_samples)
 
 
@@ -306,5 +309,5 @@ def transfer_entropy_ci(
 
 
 for _function in (transfer_entropy, transfer_entropy_test, transfer_entropy_ci):
-    _function.__doc__ = _function.__doc__.replace("{params}", _TE_PARAMETERS)
+    _function.__doc__ = (_function.__doc__ or "").replace("{params}", _TE_PARAMETERS)
 del _function
