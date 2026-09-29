@@ -1,0 +1,54 @@
+name: Build
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: "latest"
+      - run: uv python install ${{ matrix.python-version }}
+      - run: echo '${{ matrix.python-version }}' > .python-version
+      - run: uv sync --extra test
+      - run: uv run pytest --cov-report=xml
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+      - run: uv python install 3.12
+      - run: uv sync --extra dev
+      - run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+      - run: uv python install 3.12
+      - run: uv sync --extra dev
+      - run: uv run ty check
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v8.1.0
+      - run: uv python install 3.12
+      - run: uv sync --extra docs
+      - run: uv run sphinx-build -W --keep-going -b html docs docs/_build/html
