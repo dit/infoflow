@@ -97,6 +97,23 @@ class MultiplexNetwork:
                     g.nodes[node][var] = self.dataset[var].sel(node=node).item()
         return g
 
+    def save(self, path):
+        """
+        Pickle the network (dataset, skeleton, edge statistics, settings, report).
+        """
+        from .io import save
+
+        save(self, path)
+
+    @staticmethod
+    def load(path):
+        """
+        Load a network saved with :meth:`save`.
+        """
+        from .io import load
+
+        return load(path)
+
     def summary(self):
         """
         A text table of the edges with any significant layer.
@@ -187,6 +204,7 @@ def infer_multiplex(
     interpret=True,
     contemporaneous=False,
     hyperedges=False,
+    checkpoint=None,
     prng=None,
 ):
     """
@@ -234,6 +252,9 @@ def infer_multiplex(
         ``contemporaneous`` variable (0 none, 1 undirected, 2 oriented source -> target).
     hyperedges : bool
         Add two-source PID hyperedges (:mod:`infoflow.hyperedges`) as ``network.hyperedges``.
+    checkpoint : str, Path, or Checkpoint, None
+        A directory where per-target skeletons and per-edge estimates are stored as
+        they finish; rerunning with the same directory and seed resumes.
     holdout : float, None
         If given, select the skeleton on the first `holdout` fraction of each trial
         and estimate the layers on the rest. A falsely selected parent enters its
@@ -246,6 +267,10 @@ def infer_multiplex(
     -------
     MultiplexNetwork
     """
+    from .checkpoint import Checkpoint
+
+    if checkpoint is not None and not isinstance(checkpoint, Checkpoint):
+        checkpoint = Checkpoint(checkpoint)
     rng = as_generator(prng)
     discrete, chosen, report = _as_discrete(data, names, preprocess, max_lag, rng)
     names = discrete.names if names is None else list(names)
@@ -254,7 +279,7 @@ def infer_multiplex(
         embeddings = chosen if chosen is not None else Embedding(max_lag=max_lag or 3)
     settings = skeleton_settings or SkeletonSettings()
     selection_data, estimation_data = (discrete, discrete) if holdout is None else discrete.split_time(holdout)
-    skeleton = infer_skeleton(selection_data, embeddings, targets, settings, rng, map_fn=map_fn)
+    skeleton = infer_skeleton(selection_data, embeddings, targets, settings, rng, map_fn=map_fn, checkpoint=checkpoint)
 
     jobs = []
     for t, sk in skeleton.items():
@@ -286,7 +311,11 @@ def infer_multiplex(
 
     def run(job):
         (p, t, x_vars, w_vars, kind), seed = job
-        stats, delay = estimate_edge(estimation_data, t, x_vars, w_vars, estimator, n_boot, n_null, int(seed))
+
+        def compute():
+            return estimate_edge(estimation_data, t, x_vars, w_vars, estimator, n_boot, n_null, int(seed))
+
+        stats, delay = compute() if checkpoint is None else checkpoint.cached(f"edge-{p}-{t}-{kind}", compute)
         return (p, t), (stats, delay, kind)
 
     results = dict(map_fn(run, zip(jobs, seeds)))
@@ -319,7 +348,12 @@ def infer_multiplex(
         from .hyperedges import pid_hyperedges
 
         pid = pid_hyperedges(estimation_data, skeleton)
+    import datetime
+    from importlib.metadata import version
+
     provenance = {
+        "versions": {pkg: version(pkg) for pkg in ("infoflow", "dit", "numpy", "scipy")},
+        "created": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
         "estimator": estimator,
         "alpha": alpha,
         "fdr_dependent": fdr_dependent,

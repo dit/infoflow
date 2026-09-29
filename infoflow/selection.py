@@ -466,7 +466,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     return result
 
 
-def infer_skeleton(data, embeddings=None, targets=None, settings=None, prng=None, map_fn=map):
+def infer_skeleton(data, embeddings=None, targets=None, settings=None, prng=None, map_fn=map, checkpoint=None):
     """
     Skeletons for all targets, with network-level FDR on the omnibus tests.
 
@@ -480,6 +480,8 @@ def infer_skeleton(data, embeddings=None, targets=None, settings=None, prng=None
     prng : None, int, Generator
     map_fn : callable
         A ``map``-like function over targets (e.g. a dask or process-pool map).
+    checkpoint : Checkpoint, None
+        Reuse and store per-target results.
 
     Returns
     -------
@@ -492,16 +494,16 @@ def infer_skeleton(data, embeddings=None, targets=None, settings=None, prng=None
     rng = as_generator(prng)
     targets = list(range(data.n_processes)) if targets is None else list(targets)
     seeds = rng.integers(0, 2**32, size=len(targets))
-    results = dict(
-        zip(
-            targets,
-            map_fn(
-                lambda args: select_parents(data, args[0], embeddings, None, settings, int(args[1])),
-                zip(targets, seeds),
-            ),
-            strict=True,
-        )
-    )
+
+    def run(args):
+        target, seed = args
+
+        def compute():
+            return select_parents(data, target, embeddings, None, settings, int(seed))
+
+        return compute() if checkpoint is None else checkpoint.cached(f"skeleton-{target}", compute)
+
+    results = dict(zip(targets, map_fn(run, zip(targets, seeds)), strict=True))
     tested = [t for t in targets if results[t].sources]
     if settings.fdr and tested:
         reject, _ = benjamini_hochberg(
