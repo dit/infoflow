@@ -45,6 +45,8 @@ class MultiplexNetwork:
         Every setting used, for provenance.
     report : object, None
         The preprocessing report, when raw data were preprocessed.
+    hyperedges : list of dict
+        Two-source PID hyperedges, when requested.
     """
 
     dataset: xr.Dataset
@@ -52,6 +54,7 @@ class MultiplexNetwork:
     edges: dict = field(default_factory=dict)
     settings: dict = field(default_factory=dict)
     report: object = None
+    hyperedges: list = field(default_factory=list)
 
     @property
     def names(self):
@@ -182,6 +185,8 @@ def infer_multiplex(
     holdout=None,
     node_layer=True,
     interpret=True,
+    contemporaneous=False,
+    hyperedges=False,
     prng=None,
 ):
     """
@@ -224,6 +229,11 @@ def infer_multiplex(
         Add active information storage and predictability flags per node.
     interpret : bool
         Add edge roles (direct / confounded / mediated) and latent-confounding flags.
+    contemporaneous : bool
+        Add the optional lag-0 layer (:mod:`infoflow.contemporaneous`) as the
+        ``contemporaneous`` variable (0 none, 1 undirected, 2 oriented source -> target).
+    hyperedges : bool
+        Add two-source PID hyperedges (:mod:`infoflow.hyperedges`) as ``network.hyperedges``.
     holdout : float, None
         If given, select the skeleton on the first `holdout` fraction of each trial
         and estimate the layers on the rest. A falsely selected parent enters its
@@ -298,6 +308,17 @@ def infer_multiplex(
             ("source", "target"),
             latent_flags(estimation_data, skeleton, edges_run, dataset, embeddings, roles),
         )
+    if contemporaneous:
+        from .contemporaneous import contemporaneous_layer
+
+        graph, values, _ = contemporaneous_layer(estimation_data, skeleton, alpha=alpha, prng=rng)
+        dataset["contemporaneous"] = (("source", "target"), graph)
+        dataset["contemporaneous_cmi"] = (("source", "target"), values)
+    pid = []
+    if hyperedges:
+        from .hyperedges import pid_hyperedges
+
+        pid = pid_hyperedges(estimation_data, skeleton)
     provenance = {
         "estimator": estimator,
         "alpha": alpha,
@@ -308,6 +329,8 @@ def infer_multiplex(
         "holdout": holdout,
         "node_layer": node_layer,
         "interpret": interpret,
+        "contemporaneous": contemporaneous,
+        "hyperedges": hyperedges,
         "max_lag": max_lag,
         "embeddings": embeddings if isinstance(embeddings, list) else [embeddings] * discrete.n_processes,
         "skeleton_settings": settings,
@@ -319,6 +342,7 @@ def infer_multiplex(
         edges={k: v[0] for k, v in results.items()},
         settings=provenance,
         report=report,
+        hyperedges=pid,
     )
 
 
