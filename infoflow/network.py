@@ -180,6 +180,8 @@ def infer_multiplex(
     map_fn=map,
     adaptive_resamples=True,
     holdout=None,
+    node_layer=True,
+    interpret=True,
     prng=None,
 ):
     """
@@ -218,6 +220,10 @@ def infer_multiplex(
     adaptive_resamples : bool
         Raise `n_boot` and `n_null` to at least ``ceil(m / alpha)`` for ``m`` tested
         edges, so that the smallest attainable p-value can survive the FDR correction.
+    node_layer : bool
+        Add active information storage and predictability flags per node.
+    interpret : bool
+        Add edge roles (direct / confounded / mediated) and latent-confounding flags.
     holdout : float, None
         If given, select the skeleton on the first `holdout` fraction of each trial
         and estimate the layers on the rest. A falsely selected parent enters its
@@ -275,6 +281,23 @@ def infer_multiplex(
 
     results = dict(map_fn(run, zip(jobs, seeds)))
     dataset = _assemble(discrete, names, skeleton, results, alpha, fdr_dependent)
+    if node_layer:
+        from .nodes import node_layer as compute_nodes
+
+        nodes = compute_nodes(estimation_data, skeleton, alpha=alpha, prng=rng)
+        for key, values in nodes.items():
+            dataset[f"node_{key}" if key == "flags" else key] = (("node",), values)
+    if interpret:
+        from .interpret import edge_roles, latent_flags
+
+        roles, explained = edge_roles(selection_data, skeleton, embeddings, settings, prng=rng)
+        dataset["role"] = (("source", "target"), roles)
+        dataset["explained_by"] = (("source", "target"), explained)
+        edges_run = set(results)
+        dataset["flags"] = (
+            ("source", "target"),
+            latent_flags(estimation_data, skeleton, edges_run, dataset, embeddings, roles),
+        )
     provenance = {
         "estimator": estimator,
         "alpha": alpha,
@@ -283,6 +306,8 @@ def infer_multiplex(
         "n_null": n_null,
         "adaptive_resamples": adaptive_resamples,
         "holdout": holdout,
+        "node_layer": node_layer,
+        "interpret": interpret,
         "max_lag": max_lag,
         "embeddings": embeddings if isinstance(embeddings, list) else [embeddings] * discrete.n_processes,
         "skeleton_settings": settings,
