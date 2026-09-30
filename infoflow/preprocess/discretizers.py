@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from math import factorial
 
 import numpy as np
-from dit.inference import ordinal_patterns, relative_rank
+from dit.inference import ordinal_patterns
 
 from ..data import DiscreteData, as_trials
 
@@ -180,20 +180,25 @@ class Ordinal(Discretizer):
 
     The past symbol at time ``t`` is the pattern of
     :math:`(x_{t-(m-1)\\tau}, \\ldots, x_t)` (``m!`` symbols). The *present* symbol
-    is the rank of :math:`x_t` among the :math:`m` values
-    :math:`x_{t-\\tau}, \\ldots, x_{t-m\\tau}` (``m + 1`` symbols). Encoding the
-    present as a relative rank means it shares no values with the target's past
-    patterns, which removes the leakage that biases symbolic transfer entropy
-    :cite:`Staniek2008,Kugiumtzis2012`. Stacked lags of one process are spaced by
-    ``lag_step = (m - 1) * tau + 1`` so that their windows are disjoint.
+    is the equal-frequency bin of :math:`x_t` alone (``m + 1`` bins at pooled
+    quantiles), so it shares no values with the target's past patterns, the leakage
+    that biases symbolic transfer entropy :cite:`Staniek2008`. A present defined
+    relative to past values, such as the rank of :math:`x_t` among them
+    :cite:`Kugiumtzis2012`, would still carry those values' magnitudes, which the
+    past patterns do not; any child of the process would then appear to predict it.
+    Stacked lags of one process are spaced by ``lag_step = (m - 1) * tau + 1`` so
+    that their windows are disjoint.
     """
 
     order: int = 3
     delay: int = 1
     ties: str = "first"
+    edges: np.ndarray = field(default_factory=lambda: np.zeros(0))
     rank_based = True
 
     def fit(self, series):
+        values = np.concatenate([np.asarray(s, dtype=float) for s in series])
+        self.edges = np.quantile(values, np.linspace(0, 1, self.order + 2)[1:-1])
         self.past_alphabet = factorial(self.order)
         self.present_alphabet = self.order + 1
         self.lag_step = (self.order - 1) * self.delay + 1
@@ -204,14 +209,11 @@ class Ordinal(Discretizer):
         N = len(x)
         m, tau = self.order, self.delay
         past = np.full(N, -1, dtype=np.int64)
-        present = np.full(N, -1, dtype=np.int64)
         past_offset = (m - 1) * tau
-        present_offset = m * tau
         if past_offset < N:
             past[past_offset:] = ordinal_patterns(x, m, tau, self.ties)
-        if present_offset < N:
-            present[present_offset:] = relative_rank(x, m, tau, self.ties)
-        return Encoding(past, present, past_offset, present_offset)
+        present = np.searchsorted(self.edges, x, side="right").astype(np.int64)
+        return Encoding(past, present, past_offset, 0)
 
     def params(self):
         return {"name": "Ordinal", "order": self.order, "delay": self.delay, "ties": self.ties}

@@ -89,3 +89,48 @@ def test_summary_hides_nonsignificant_estimates():
     row = next(line for line in hidden.splitlines() if line.strip().startswith("x1 -> x0"))
     assert row.split()[-3] == "–"  # intrinsic flow of the reverse edge is not significant
     assert "*" not in hidden and "*" in shown
+
+
+def test_orthogonal_features_of_one_driver_share_no_flow():
+    """
+    x1 reads the sign of an i.i.d. Gaussian x0 and x2 reads whether |x0| is large.
+    Sign and magnitude are independent, so both edges from x0 are intrinsic and
+    x1, x2 exchange no flow of any kind despite sharing a driver.
+    """
+    from infoflow.data import realizations
+    from infoflow.layers import layer_statistics
+    from infoflow.preprocess import preprocess
+
+    raw = datasets.orthogonal_features(4000, seed=0)
+    net = infer_multiplex(raw, max_lag=3, skeleton_settings=FAST, prng=0)
+    ds = net.dataset
+    # The driver has no dynamics of its own, so it keeps bins (sign and magnitude both survive).
+    assert "unpredictable" in net.report.nodes[0].flags
+    intrinsic = ds["significant"].sel(layer="intrinsic").values
+    assert intrinsic[0, 1] and intrinsic[0, 2]
+    assert not ds["significant"].values[:, [1, 2], [2, 1]].any()
+    assert net.skeleton[0].sources == []
+
+    # Estimate x1 -> x2 anyway, in x2's full context: no shared (or any) flow.
+    data = preprocess(raw, max_lag=3, prng=0).data
+    r = realizations(data, 2, [(1, 1), (2, 1), (0, 1)])
+    stats = layer_statistics(r.present, r.columns([(1, 1)]), r.columns([(2, 1), (0, 1)]), n_boot=50, n_null=99, prng=0)
+    assert stats.pvalue["shared"] > 0.05
+    assert stats.flow.shared < 0.01 and stats.flow.tdmi < 0.01
+
+
+def test_ordinal_present_does_not_leak_to_children():
+    """
+    A present symbol defined relative to past values would let x0's children (which saw
+    those values) predict it; the ordinal present is the bin of x_t alone, so x0 has no parents.
+    """
+    from infoflow.preprocess import EqualFrequency, Ordinal
+
+    net = infer_multiplex(
+        datasets.orthogonal_features(4000, seed=0),
+        max_lag=3,
+        skeleton_settings=FAST,
+        preprocess={"discretizer": [Ordinal(2, 2), EqualFrequency(6), EqualFrequency(6)]},
+        prng=0,
+    )
+    assert net.skeleton[0].sources == []

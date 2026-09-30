@@ -223,7 +223,19 @@ def _node(p, name, series, screen_result, settings, rng):
         eligible = sorted((c for c in cands if c["score"] >= threshold), key=lambda c: (c["alphabet"], -c["score"]))
         chosen = eligible[0]
         report.rule = "one-standard-error"
-        if chosen["kind"] == "ordinal":
+        if threshold <= 0:
+            # No candidate predicts the node's own future, so its own dynamics cannot
+            # choose a symbolization; keep the middle reference resolution as bins.
+            B = sorted(settings["resolutions"])[len(settings["resolutions"]) // 2]
+            match = [c for c in cands if c["kind"] == "equal_frequency" and c["bins"] == B and c["dims"] == 1]
+            chosen = (
+                match[0]
+                if match
+                else {"kind": "equal_frequency", "bins": B, "dims": 1, "delay": taus[0], "alphabet": B}
+            )
+            report.rule = "unpredictable: middle reference resolution"
+            report.flags.append("unpredictable")
+        elif chosen["kind"] == "ordinal":
             pooled = series if len(series) > 1 else series[0]
             from dit.inference import Trials
 

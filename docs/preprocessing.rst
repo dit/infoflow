@@ -16,8 +16,12 @@ as few free parameters as possible. For each process it
    standard error of the best, a forecast-driven choice in the spirit of
    :cite:`Garland2015,Garland2016`. Candidates are equal-frequency and equal-width
    bins, a median threshold, and ordinal patterns :cite:`Bandt2002` (with the
-   relative-rank present of :cite:`Kugiumtzis2012`); weighted permutation entropy
+   present encoded as the bin of the current value alone, so it carries nothing
+   about past values); weighted permutation entropy
    :cite:`Fadlallah2013` breaks ties between ordinal candidates;
+   A node whose own future no candidate predicts gives no basis for a choice; it
+   keeps equal-frequency bins at the middle reference resolution and is flagged
+   ``unpredictable``;
 4. chooses a **lag budget** with the bootstrap plateau rule of :cite:`Rudelt2021`,
    cross-checked against a BIC Markov order.
 

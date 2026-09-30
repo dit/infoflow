@@ -4,8 +4,8 @@ Discretized multivariate data and alignment of variables into realizations.
 A *variable* is a pair ``(process, lag)``. For a target process ``j`` at time
 ``t`` its present is ``present[j][t]`` and a past variable ``(p, lag)`` takes the
 value ``past[p][t - lag]``. Keeping separate past and present encodings lets
-ordinal discretizations encode the present as a relative rank, which shares no
-values with the patterns of the past :cite:`Kugiumtzis2012`.
+ordinal discretizations encode the present as the bin of the current value alone,
+which shares no values with the patterns of the past :cite:`Staniek2008`.
 """
 
 from dataclasses import dataclass, field

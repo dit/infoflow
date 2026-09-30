@@ -6,7 +6,7 @@ from math import factorial
 
 import numpy as np
 import pytest
-from dit.inference import Trials, ordinal_patterns, relative_rank
+from dit.inference import Trials, ordinal_patterns
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -34,11 +34,13 @@ def test_equal_frequency_is_balanced_and_rank_based():
 def test_ordinal_encoding_matches_dit():
     x = np.random.default_rng(1).normal(size=(300, 1))
     d = discretize(x, Ordinal(3, 2))
-    assert d.past_offset[0] == 4 and d.present_offset[0] == 6
+    assert d.past_offset[0] == 4 and d.present_offset[0] == 0
     assert d.past_alphabet[0] == factorial(3) and d.present_alphabet[0] == 4
     assert d.lag_step[0] == 5
     assert np.array_equal(d.past[0][0, 4:], ordinal_patterns(x[:, 0], 3, 2))
-    assert np.array_equal(d.present[0][0, 6:], relative_rank(x[:, 0], 3, 2))
+    # The present is the quartile of x_t alone.
+    quartile = np.searchsorted(np.quantile(x[:, 0], [0.25, 0.5, 0.75]), x[:, 0], side="right")
+    assert np.array_equal(d.present[0][0], quartile)
     assert np.all(d.past[0][0, :4] == -1)
 
 

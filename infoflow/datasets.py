@@ -11,6 +11,7 @@ __all__ = (
     "common_driver",
     "coupled_logistic",
     "mute_network",
+    "orthogonal_features",
     "var_process",
     "xor_synergy",
 )
@@ -122,3 +123,25 @@ def chain(n=3000, noise=0.1, seed=None):
     b = np.roll(a, 1) ^ (rng.random(n) < noise)
     c = np.roll(b, 2) ^ (rng.random(n) < noise)
     return np.stack([a, b, c], axis=1)
+
+
+def orthogonal_features(n=4000, memory=0.5, noise=0.5, seed=None):
+    """
+    One i.i.d. Gaussian driver read through two independent features. Columns (x0, x1, x2).
+
+    ``x1`` responds to the sign of ``x0`` and ``x2`` to whether ``|x0|`` exceeds
+    0.674 (its quartile, so each feature is a fair coin), both at lag 1 with their
+    own AR(1) memory. For a symmetric driver the sign and the magnitude are
+    independent, so ``x1`` and ``x2`` are independent processes: both edges from
+    ``x0`` are intrinsic, and there is no flow of any kind between ``x1`` and ``x2``
+    even though they share a driver.
+    """
+    rng = _rng(seed)
+    x0 = rng.normal(size=n)
+    sign = np.where(x0 > 0, 1.0, -1.0)
+    large = np.where(np.abs(x0) > 0.674, 1.0, -1.0)
+    x1, x2 = np.zeros(n), np.zeros(n)
+    for t in range(1, n):
+        x1[t] = memory * x1[t - 1] + sign[t - 1] + noise * rng.normal()
+        x2[t] = memory * x2[t - 1] + large[t - 1] + noise * rng.normal()
+    return np.stack([x0, x1, x2], axis=1)
