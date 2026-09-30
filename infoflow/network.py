@@ -114,9 +114,13 @@ class MultiplexNetwork:
 
         return load(path)
 
-    def summary(self):
+    def summary(self, show_nonsignificant=False):
         """
-        A text table of the edges with any significant layer.
+        A text table of the tested edges and their layer estimates.
+
+        Non-significant estimates are shown as ``–``: at large contexts their point
+        values are dominated by estimation bias. With `show_nonsignificant`, every
+        estimate is printed and significant ones are marked ``*``.
         """
         lines = ["source -> target  kind              delay  " + "  ".join(f"{k:>11}" for k in LAYERS)]
         for s, t in sorted(self.edges):
@@ -125,7 +129,10 @@ class MultiplexNetwork:
             for k in LAYERS:
                 w = float(self.dataset["weight"].sel(layer=k, source=src, target=tgt))
                 sig = bool(self.dataset["significant"].sel(layer=k, source=src, target=tgt))
-                cells.append(f"{w:10.3f}{'*' if sig else ' '}")
+                if show_nonsignificant:
+                    cells.append(f"{w:10.3f}{'*' if sig else ' '}")
+                else:
+                    cells.append(f"{w:11.3f}" if sig else f"{'–':>11}")
             kind = str(self.dataset["kind"].sel(source=src, target=tgt).item())
             delay = int(self.dataset["delay"].sel(source=src, target=tgt))
             lines.append(f"{src:>6} -> {tgt:<6}  {kind:<16}  {delay:5d}  " + "  ".join(cells))
@@ -327,15 +334,21 @@ def infer_multiplex(
         for key, values in nodes.items():
             dataset[f"node_{key}" if key == "flags" else key] = (("node",), values)
     if interpret:
-        from .interpret import edge_roles, latent_flags
+        from .interpret import edge_roles, explain_shared, latent_flags
 
         roles, explained = edge_roles(selection_data, skeleton, embeddings, settings, prng=rng)
+        edges_run = set(results)
+        shared_kind, shared_by = explain_shared(estimation_data, skeleton, edges_run, dataset, prng=rng)
+        unset = (roles == "") & (shared_kind != "") & (shared_kind != "unexplained") & (shared_kind != "target-history")
+        roles = np.where(unset, shared_kind, roles)
+        explained = np.where(unset, shared_by, explained)
         dataset["role"] = (("source", "target"), roles)
         dataset["explained_by"] = (("source", "target"), explained)
-        edges_run = set(results)
+        dataset["shared_explanation"] = (("source", "target"), shared_kind)
+        dataset["shared_explained_by"] = (("source", "target"), shared_by)
         dataset["flags"] = (
             ("source", "target"),
-            latent_flags(estimation_data, skeleton, edges_run, dataset, embeddings, roles),
+            latent_flags(estimation_data, skeleton, edges_run, dataset, embeddings, shared_kind, prng=rng),
         )
     if contemporaneous:
         from .contemporaneous import contemporaneous_layer
