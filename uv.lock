@@ -518,8 +518,8 @@ wheels = [
 
 [[package]]
 name = "dit"
-version = "2.4.dev3+g31843df96"
-source = { git = "https://github.com/dit/dit?branch=cursor%2Fmarkov-order-inference#31843df96efb975944cdc33eb73dde8cb2242fbc" }
+version = "2.4.dev2+gaa7348e44"
+source = { git = "https://github.com/dit/dit?branch=main#aa7348e440b457968c26927c7183e90010d3c2be" }
 dependencies = [
     { name = "boltons" },
     { name = "debtcollector" },
@@ -764,7 +764,7 @@ requires-dist = [
     { name = "bokeh", marker = "extra == 'plot'" },
     { name = "dask", extras = ["delayed"], marker = "extra == 'dev'" },
     { name = "dask", extras = ["delayed"], marker = "extra == 'parallel'" },
-    { name = "dit", git = "https://github.com/dit/dit?branch=cursor%2Fmarkov-order-inference" },
+    { name = "dit", git = "https://github.com/dit/dit?branch=main" },
     { name = "holoviews", marker = "extra == 'plot'" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "hypothesis", marker = "extra == 'test'", specifier = ">=6.0" },

@@ -71,7 +71,7 @@ dev = [
 # Until the dit release containing dit.inference's Markov-order, ordinal, and
 # surrogate tools, develop against the dit PR branch.
 [tool.uv.sources]
-dit = { git = "https://github.com/dit/dit", branch = "cursor/markov-order-inference" }
+dit = { git = "https://github.com/dit/dit", branch = "main" }
 sofic = { git = "https://github.com/dit/sofic", branch = "main" }
 
 # ── Build configuration ─────────────────────────────────────────────────
