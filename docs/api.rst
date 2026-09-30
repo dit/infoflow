@@ -58,7 +58,8 @@ Comparison and workflow
 .. automodule:: infoflow.io
 .. automodule:: infoflow.plot
 
-Example processes
------------------
+Example processes and benchmarks
+--------------------------------
 
 .. automodule:: infoflow.datasets
+.. automodule:: infoflow.benchmarks

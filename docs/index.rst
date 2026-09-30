@@ -32,5 +32,6 @@ and false-discovery-rate control.
    skeleton
    interpretation
    workflow
+   benchmarks
    api
    zreferences
