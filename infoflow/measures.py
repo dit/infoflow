@@ -126,7 +126,7 @@ def _objective(theta_flat, p, Kw, Kz):
     return value, grad_theta.ravel()
 
 
-def intrinsic_flow(p, bound=None, restarts=5, initial=None, prng=None, maxiter=500):
+def intrinsic_flow(p, bound=None, restarts=5, initial=None, prng=None, maxiter=500, max_parameters=1_000_000):
     """
     Minimize :math:`I[Y : X \\mid \\bar W]` over channels :math:`p(\\bar w \\mid w)`.
 
@@ -145,6 +145,11 @@ def intrinsic_flow(p, bound=None, restarts=5, initial=None, prng=None, maxiter=5
     prng : None, int, Generator
     maxiter : int
         Iterations per L-BFGS run.
+    max_parameters : int
+        Largest channel (``|W| * bound`` entries) to optimize. Beyond it the bound is
+        reduced to fit, or, if even a binary :math:`\\bar W` does not fit, only the
+        identity and constant channels are evaluated; either way the result is an
+        upper bound on the intrinsic flow and a warning is issued.
 
     Returns
     -------
@@ -160,13 +165,29 @@ def intrinsic_flow(p, bound=None, restarts=5, initial=None, prng=None, maxiter=5
     p = p / p.sum()
     Kw = p.shape[2]
     Kz = Kw if bound is None else int(bound)
+    optimize = Kw > 1
+    if Kw * Kz > max_parameters:
+        import warnings
+
+        if 2 * Kw <= max_parameters:
+            Kz = max_parameters // Kw
+            warnings.warn(
+                f"{Kw} context values: channel bound reduced to {Kz}; the intrinsic flow is an upper bound.",
+                stacklevel=2,
+            )
+        else:
+            optimize = False
+            warnings.warn(
+                f"{Kw} context values: too many to optimize; the intrinsic flow is min(TE, TDMI), an upper bound.",
+                stacklevel=2,
+            )
     identity = np.eye(Kw, Kz)
     if Kz < Kw:
         identity[Kz:, 0] = 1.0
     constant = np.zeros((Kw, Kz))
     constant[:, 0] = 1.0
     candidates = [(cmi_from_joint(_degrade(p, identity)), identity), (cmi_from_joint(_degrade(p, constant)), constant)]
-    if Kw > 1:
+    if optimize:
         rng = as_generator(prng)
         if initial is not None:
             starts = [np.log(np.clip(initial, 1e-6, None))]

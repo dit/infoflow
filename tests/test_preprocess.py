@@ -101,3 +101,11 @@ def test_preprocess_overrides_and_report():
     assert "lag budget" in per.report.summary()
     capped = preprocess(x, max_lag=1, prng=0)
     assert all(e.max_lag <= 1 for e in capped.embeddings)
+
+
+def test_equal_width_candidates_are_opt_in():
+    x = np.random.default_rng(5).standard_t(3, size=(1500, 1))
+    default = preprocess(x, max_lag=3, prng=0).report.nodes[0]
+    widths = preprocess(x, max_lag=3, equal_width=True, prng=0).report.nodes[0]
+    assert not any(c["kind"] == "equal_width" for c in default.candidates)
+    assert any(c["kind"] == "equal_width" for c in widths.candidates)

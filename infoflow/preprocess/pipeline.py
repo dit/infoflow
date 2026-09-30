@@ -34,7 +34,7 @@ from dit.inference._symbols import as_generator
 from ..data import DiscreteData, as_trials
 from ..embedding import Embedding
 from .delays import delay_candidates
-from .discretizers import Discretizer, EqualFrequency, Ordinal, discretize
+from .discretizers import Discretizer, EqualFrequency, EqualWidth, Ordinal, discretize
 from .scaling import block_entropy_scaling
 from .scoring import context_codes, score_contexts
 from .screening import screen, split_missing
@@ -100,7 +100,7 @@ class PreprocessResult:
     report: PreprocessingReport
 
 
-def _candidates(series, taus, N, orders, bins, dims, ties, max_alphabet_fraction):
+def _candidates(series, taus, N, orders, bins, dims, ties, max_alphabet_fraction, equal_width=False):
     cap = max(N * max_alphabet_fraction, 2)
     out = []
     for tau in taus:
@@ -111,12 +111,16 @@ def _candidates(series, taus, N, orders, bins, dims, ties, max_alphabet_fraction
             for d in dims:
                 if B**d <= cap and (d > 1 or tau == taus[0]):
                     out.append({"kind": "equal_frequency", "bins": B, "dims": d, "delay": tau, "alphabet": B**d})
+                    if equal_width:
+                        out.append({"kind": "equal_width", "bins": B, "dims": d, "delay": tau, "alphabet": B**d})
     return out
 
 
 def _discretizer(c):
     if c["kind"] == "ordinal":
         return Ordinal(c["order"], c["delay"], c.get("ties", "first"))
+    if c["kind"] == "equal_width":
+        return EqualWidth(c["bins"])
     return EqualFrequency(c["bins"])
 
 
@@ -213,6 +217,7 @@ def _node(p, name, series, screen_result, settings, rng):
             settings["dims"],
             ties,
             settings["max_alphabet_fraction"],
+            settings["equal_width"],
         )
         for c in cands:
             mean, se, per, _ = _score(c, series, settings["resolutions"], settings["folds"])
@@ -243,7 +248,7 @@ def _node(p, name, series, screen_result, settings, rng):
             pe = permutation_entropy(data, chosen["order"], chosen["delay"], normalize=True)
             wpe = weighted_permutation_entropy(data, chosen["order"], chosen["delay"], normalize=True)
             if pe - wpe > settings["wpe_margin"]:
-                binned = [c for c in eligible if c["kind"] == "equal_frequency"]
+                binned = [c for c in eligible if c["kind"] != "ordinal"]
                 if binned:
                     chosen = binned[0]
                     report.rule = "one-standard-error; amplitude (WPE) favours bins"
@@ -296,13 +301,15 @@ def _from_fixed(fixed, taus):
         }
     if isinstance(fixed, EqualFrequency):
         return {"kind": "equal_frequency", "bins": fixed.bins, "dims": 1, "delay": taus[0], "alphabet": fixed.bins}
+    if isinstance(fixed, EqualWidth):
+        return {"kind": "equal_width", "bins": fixed.bins, "dims": 1, "delay": taus[0], "alphabet": fixed.bins}
     if isinstance(fixed, str):
         if fixed == "ordinal":
             return {"kind": "ordinal", "order": 3, "delay": 1, "alphabet": 6, "ties": "first"}
         if fixed in ("equal_frequency", "bins"):
             return {"kind": "equal_frequency", "bins": 4, "dims": 1, "delay": 1, "alphabet": 4}
     if isinstance(fixed, Discretizer):
-        raise ValueError("only Ordinal and EqualFrequency discretizers can be scored; discretize manually instead")
+        raise ValueError("only Ordinal, EqualFrequency, and EqualWidth discretizers can be scored; discretize manually")
     raise ValueError(f"unknown discretizer {fixed!r}")
 
 
@@ -320,6 +327,7 @@ def preprocess(
     max_alphabet_fraction=0.1,
     max_history=None,
     wpe_margin=0.05,
+    equal_width=False,
     map_fn=map,
     prng=None,
 ):
@@ -335,8 +343,9 @@ def preprocess(
         Upper bound on any node's lag budget (default: 4 times the largest delay
         candidate, at most 50).
     discretizer : Discretizer, str, list, None
-        Override the automatic choice: an :class:`Ordinal` or :class:`EqualFrequency`
-        instance, ``'ordinal'``, ``'equal_frequency'``, or one per process.
+        Override the automatic choice: an :class:`Ordinal`, :class:`EqualFrequency`,
+        or :class:`EqualWidth` instance, ``'ordinal'``, ``'equal_frequency'``, or one
+        per process.
     max_delay : int
         Largest delay considered by the delay heuristics.
     resolutions : tuple of int
@@ -351,6 +360,11 @@ def preprocess(
         Largest lag considered for the lag budget (default `max_lag`).
     wpe_margin : float
         Normalized-PE minus WPE above which amplitude is judged informative.
+    equal_width : bool
+        Also score equal-width bins. They keep amplitude, so they resolve heavy
+        tails, where a parent's nonlinear effect (e.g. through :math:`x^2`) varies
+        most, far better than equal-frequency bins; the price is that the pipeline
+        is no longer invariant to monotone transforms of the data.
     map_fn : callable
         ``map``-like function over processes.
     prng : None, int, Generator
@@ -376,6 +390,7 @@ def preprocess(
         "max_history": max_history if max_history is not None else (max_lag if max_lag is not None else 50),
         "wpe_margin": wpe_margin,
         "discretizer": discretizer,
+        "equal_width": equal_width,
     }
     seeds = rng.integers(0, 2**32, size=P)
 

@@ -127,7 +127,8 @@ class EqualFrequency(Discretizer):
 @dataclass(repr=False)
 class EqualWidth(Discretizer):
     """
-    Equal-width bins over the pooled range. Not rank-based; never chosen automatically.
+    Equal-width bins over the pooled range. Not rank-based, so not invariant to
+    monotone transforms; scored automatically only with ``preprocess(equal_width=True)``.
     """
 
     bins: int = 4

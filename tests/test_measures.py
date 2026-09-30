@@ -116,3 +116,14 @@ def test_edge_flows_single_joint():
     assert flow.intrinsic == pytest.approx(flow.raw["intrinsic"], abs=1e-9)
     assert flow.te == pytest.approx(flow.intrinsic + flow.synergistic)
     assert edge_flows(y, x, None, prng=0).synergistic == pytest.approx(0, abs=1e-9)
+
+
+def test_intrinsic_flow_guards_oversized_channels():
+    p = np.random.default_rng(0).random((2, 3, 40))
+    te, tdmi = cmi_from_joint(p), cmi_from_joint(p.sum(axis=2, keepdims=True))
+    with pytest.warns(UserWarning, match="upper bound"):
+        reduced, channel = intrinsic_flow(p, max_parameters=200, prng=0)
+    assert channel.shape == (40, 5) and reduced <= min(te, tdmi) + 1e-9
+    with pytest.warns(UserWarning, match="min\\(TE, TDMI\\)"):
+        skipped, _ = intrinsic_flow(p, max_parameters=50, prng=0)
+    assert skipped == pytest.approx(min(te, tdmi))

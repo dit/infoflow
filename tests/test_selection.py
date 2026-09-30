@@ -124,3 +124,22 @@ def test_check_n_perm():
     check_n_perm(19, 0.05)
     with pytest.raises(ValueError):
         SkeletonSettings(n_perm_omnibus=5).check()
+
+
+def test_ksg_selection_on_raw_values():
+    from infoflow.preprocess import preprocess
+
+    rng = np.random.default_rng(4)
+    n = 800
+    x = rng.normal(size=n)
+    y = np.zeros(n)
+    for t in range(1, n):
+        y[t] = 0.4 * y[t - 1] + 0.8 * x[t - 1] + 0.5 * rng.normal()
+    result = preprocess(np.stack([x, y], axis=1), max_lag=2, prng=0)
+    settings = dataclasses.replace(SkeletonSettings(**FAST), estimator="ksg", synergy_search=False, tdmi_screen=False)
+    sk = select_parents(result.data, 1, result.embeddings, None, settings, 0)
+    assert sk.parents() == [0] and (0, 1) in sk.sources
+    with pytest.raises(ValueError, match="raw series"):
+        select_parents(
+            DiscreteData.from_discrete([np.stack([x > 0, y > 0], axis=1).astype(int)]), 1, None, None, settings, 0
+        )
