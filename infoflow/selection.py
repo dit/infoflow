@@ -25,6 +25,7 @@ variables to every conditioning set. All CMIs of one target use a common set of
 realizations, so candidate sets are compared on the same samples.
 """
 
+import os
 from dataclasses import dataclass, field
 from itertools import combinations
 from math import factorial
@@ -58,8 +59,9 @@ class SkeletonSettings:
     Settings for skeleton inference (defaults follow IDTxl where it has one).
 
     ``estimator='ksg'`` runs parent selection on the raw continuous values with the
-    KSG conditional mutual information (``ksg_k`` neighbours) :cite:`Runge2018`, as
-    IDTxl does, instead of the plug-in estimate on symbols. Conditioning on a parent
+    KSG conditional mutual information (``ksg_k`` neighbours, ``ksg_threads``
+    threads, default all cores) :cite:`Kraskov2004,Frenzel2007`, as IDTxl does,
+    instead of the plug-in estimate on symbols. Conditioning on a parent
     continuously removes its influence exactly, where bins leave a residue inside
     each bin that can hide weak edges; the layers are still estimated on symbols.
     It is much slower.
@@ -91,6 +93,7 @@ class SkeletonSettings:
     fdr_constant: int = 1
     estimator: str = "plugin"
     ksg_k: int = 4
+    ksg_threads: int | None = None
 
     def check(self):
         for name in ("max_stat", "min_stat", "omnibus", "max_seq"):
@@ -178,6 +181,7 @@ class _Columns:
         self.alphabet = {v: int(data.past_alphabet[v[0]]) for v in self.variables}
         self.y, self.Ky = _densify(self.r.present)
         self.n = len(self.y)
+        self.map = map
 
     def column(self, v):
         return self.r.values[:, self.index[v]], self.alphabet[v]
@@ -202,11 +206,15 @@ class _KsgColumns:
     The raw (continuous) values of one target's realizations, for KSG estimates.
 
     Same interface as :class:`_Columns`: columns are raw values (each process
-    z-scored, since the KSG max-norm compares dimensions), joints are stacked
-    columns, and :meth:`cmi` is the Frenzel--Pompe/KSG estimate :cite:`Runge2018`.
+    z-scored, since the max-norm compares dimensions), joints are stacked columns,
+    and :meth:`cmi` is the Frenzel--Pompe estimate :cite:`Kraskov2004,Frenzel2007`
+    with neighbours counted strictly inside each point's radius. The trees over
+    (target, context) and over the context are built once per conditioning set and
+    reused for every candidate and permutation, and :attr:`map` evaluates candidates
+    and permutations on a thread pool (the tree queries release the GIL).
     """
 
-    def __init__(self, data, target, variables, max_lag, k=4, prng=None):
+    def __init__(self, data, target, variables, max_lag, k=4, threads=None, prng=None):
         if data.raw is None:
             raise ValueError("estimator='ksg' needs the raw series; pass continuous data (not DiscreteData).")
         self.r = realizations(data, target, variables, max_lag=max_lag)
@@ -216,7 +224,9 @@ class _KsgColumns:
         pooled = np.concatenate(data.raw)
         scale = pooled.std(axis=0)
         scale = np.where(scale > 0, scale, 1.0)
+        rng = as_generator(prng)
         raw = [(t - pooled.mean(axis=0)) / scale for t in data.raw]
+        raw = [t + 1e-10 * rng.normal(size=t.shape) for t in raw]  # break ties (KSG assumes none)
         trial, time = self.r.trial, self.r.time
         self.y = np.array([raw[i][j, target] for i, j in zip(trial, time, strict=True)])
         self.Ky = 1
@@ -225,7 +235,16 @@ class _KsgColumns:
             [[raw[i][j - lag, p] for p, lag in self.variables] for i, j in zip(trial, time, strict=True)]
         ).reshape(self.n, len(self.variables))
         self.k = k
-        self.rng = as_generator(prng)
+        self._contexts = {}
+        from concurrent.futures import ThreadPoolExecutor
+
+        self._pool = ThreadPoolExecutor(threads or os.cpu_count() or 1)
+        self.map = self._pool.map
+
+    def __del__(self):
+        pool = getattr(self, "_pool", None)
+        if pool is not None:
+            pool.shutdown(wait=False)
 
     def column(self, v):
         return self._values[:, self.index[v]], 1
@@ -234,19 +253,41 @@ class _KsgColumns:
         cols = [self.index[v] for v in variables]
         return self._values[:, cols], len(cols)
 
+    def _context(self, z):
+        from scipy.spatial import KDTree
+
+        key = (z.shape, hash(z.tobytes()))
+        if key not in self._contexts:
+            yz = np.column_stack([self.y, z])
+            self._contexts[key] = (yz, KDTree(yz), KDTree(z) if z.shape[1] else None)
+            if len(self._contexts) > 64:
+                self._contexts.pop(next(iter(self._contexts)))
+        return self._contexts[key]
+
     def cmi(self, c, Kc, z, Kz):
         """
         KSG :math:`I[Y : c \\mid z]` in bits.
         """
-        from dit.inference import total_correlation_ksg
+        from scipy.spatial import KDTree
+        from scipy.special import digamma
 
         c = np.asarray(c, dtype=float).reshape(self.n, -1)
         z = np.asarray(z, dtype=float).reshape(self.n, -1)
-        dc, dz = c.shape[1], z.shape[1]
-        stacked = np.column_stack([c, self.y, z])
-        crvs = list(range(dc + 1, dc + 1 + dz)) or None
-        value = total_correlation_ksg(stacked, [list(range(dc)), [dc]], crvs, k=self.k, prng=self.rng)
-        return max(float(value), 0.0)
+        yz, yz_tree, z_tree = self._context(z)
+        k = self.k
+        xyz = np.column_stack([c, yz])
+        radius = np.nextafter(KDTree(xyz).query(xyz, k + 1, p=np.inf)[0][:, -1], 0)
+
+        def count(tree, points):
+            return tree.query_ball_point(points, radius, p=np.inf, return_length=True)
+
+        xz = np.column_stack([c, z])
+        n_xz, n_yz = count(KDTree(xz), xz), count(yz_tree, yz)
+        if z_tree is None:
+            value = digamma(k) + digamma(self.n) - np.mean(digamma(n_xz) + digamma(n_yz))
+        else:
+            value = digamma(k) - np.mean(digamma(n_xz) + digamma(n_yz) - digamma(count(z_tree, z)))
+        return max(float(value) / np.log(2), 0.0)
 
 
 def _permuter(columns, settings, rng):
@@ -327,15 +368,14 @@ def _max_statistic(cols, candidates, cond, n_perm, perm):
     The best candidate, its CMI, and the max-statistic p-value.
     """
     z, Kz = cols.joint(cond)
-    obs = []
-    for v in candidates:
-        c, a = cols.column(v)
-        obs.append(cols.cmi(c, a, z, Kz))
+    obs = list(cols.map(lambda v: cols.cmi(cols.column(v)[0], cols.alphabet[v], z, Kz), candidates))
     best = int(np.argmax(obs))
-    null = np.empty(n_perm)
-    for s in range(n_perm):
-        idx = perm()
-        null[s] = max(cols.cmi(cols.column(v)[0][idx], cols.alphabet[v], z, Kz) for v in candidates)
+    permutations = [perm() for _ in range(n_perm)]
+
+    def permuted(idx):
+        return max(cols.cmi(cols.column(v)[0][idx], cols.alphabet[v], z, Kz) for v in candidates)
+
+    null = np.array(list(cols.map(permuted, permutations)))
     return candidates[best], obs[best], _pvalue(null, obs[best])
 
 
@@ -360,17 +400,11 @@ def _pair_search(cols, candidates, cond, settings, perm):
     if not pairs:
         return None
     z, Kz = cols.joint(cond)
-    obs = []
-    codes = []
-    for a, b in pairs:
-        c, K = cols.joint([a, b])
-        codes.append((c, K))
-        obs.append(cols.cmi(c, K, z, Kz))
+    codes = [cols.joint([a, b]) for a, b in pairs]
+    obs = list(cols.map(lambda code: cols.cmi(code[0], code[1], z, Kz), codes))
     best = int(np.argmax(obs))
-    null = np.empty(settings.n_perm_pairs)
-    for s in range(settings.n_perm_pairs):
-        idx = perm()
-        null[s] = max(cols.cmi(c[idx], K, z, Kz) for c, K in codes)
+    permutations = [perm() for _ in range(settings.n_perm_pairs)]
+    null = np.array(list(cols.map(lambda idx: max(cols.cmi(c[idx], K, z, Kz) for c, K in codes), permutations)))
     if _pvalue(null, obs[best]) <= settings.alpha_pairs:
         return pairs[best]
     return None
@@ -388,12 +422,14 @@ def _individual(cols, variables, cond, v, idx=None):
 def _prune(cols, sources, cond, n_perm, alpha, perm):
     sources = list(sources)
     while sources:
-        obs = [_individual(cols, sources, cond, v) for v in sources]
+        obs = list(cols.map(lambda v, sources=sources: _individual(cols, sources, cond, v), sources))
         k = int(np.argmin(obs))
-        null = np.empty(n_perm)
-        for s in range(n_perm):
-            idx = perm()
-            null[s] = min(_individual(cols, sources, cond, v, idx) for v in sources)
+        permutations = [perm() for _ in range(n_perm)]
+
+        def permuted(idx, sources=sources):
+            return min(_individual(cols, sources, cond, v, idx) for v in sources)
+
+        null = np.array(list(cols.map(permuted, permutations)))
         if _pvalue(null, obs[k]) <= alpha:
             break
         sources.pop(k)
@@ -401,12 +437,14 @@ def _prune(cols, sources, cond, n_perm, alpha, perm):
 
 
 def _sequential(cols, sources, cond, n_perm, alpha, perm):
-    obs = np.array([_individual(cols, sources, cond, v) for v in sources])
+    obs = np.array(list(cols.map(lambda v: _individual(cols, sources, cond, v), sources)))
     order = np.argsort(-obs)
-    null = np.empty((n_perm, len(sources)))
-    for s in range(n_perm):
-        idx = perm()
-        null[s] = np.sort([_individual(cols, sources, cond, v, idx) for v in sources])[::-1]
+    permutations = [perm() for _ in range(n_perm)]
+
+    def permuted(idx):
+        return np.sort([_individual(cols, sources, cond, v, idx) for v in sources])[::-1]
+
+    null = np.array(list(cols.map(permuted, permutations))).reshape(n_perm, len(sources))
     pvalues = {}
     failed = False
     for rank, k in enumerate(order):
@@ -467,7 +505,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     everything = list(dict.fromkeys(target_cands + source_cands + conditionals))
     max_lag = max(v[1] for v in everything) if everything else 0
     if settings.estimator == "ksg":
-        cols = _KsgColumns(data, target, everything, max_lag, k=settings.ksg_k, prng=rng)
+        cols = _KsgColumns(data, target, everything, max_lag, k=settings.ksg_k, threads=settings.ksg_threads, prng=rng)
     else:
         cols = _Columns(data, target, everything, max_lag)
     result = TargetSkeleton(target=target, conditionals=conditionals, n_samples=cols.n)
@@ -519,9 +557,8 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         s, Ks = cols.joint(selected)
         z, Kz = cols.joint(base)
         result.omnibus_te = cols.cmi(s, Ks, z, Kz)
-        null = np.empty(settings.n_perm_omnibus)
-        for k in range(settings.n_perm_omnibus):
-            null[k] = cols.cmi(s[perm()], Ks, z, Kz)
+        permutations = [perm() for _ in range(settings.n_perm_omnibus)]
+        null = np.array(list(cols.map(lambda idx: cols.cmi(s[idx], Ks, z, Kz), permutations)))
         result.omnibus_pvalue = _pvalue(null, result.omnibus_te)
         result.source_pvalues = _sequential(cols, selected, base, settings.n_perm_max_seq, settings.alpha_max_seq, perm)
         result.sources = [v for v in selected if result.source_pvalues[v] <= settings.alpha_max_seq]
