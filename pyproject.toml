@@ -60,6 +60,9 @@ plot = [
 causal = [
     "tigramite",
 ]
+gpu = [
+    "torch>=2.4",
+]
 dev = [
     "infoflow[test,docs,parallel]",
     "ruff",
@@ -137,7 +140,7 @@ known-first-party = ["infoflow"]
 python-version = "3.12"
 
 [tool.ty.analysis]
-allowed-unresolved-imports = ["dask", "dask.**", "holoviews", "holoviews.**", "tigramite", "tigramite.**", "sofic", "sofic.**"]
+allowed-unresolved-imports = ["dask", "dask.**", "holoviews", "holoviews.**", "tigramite", "tigramite.**", "sofic", "sofic.**", "torch", "torch.**"]
 
 [tool.ty.rules]
 unresolved-import = "error"

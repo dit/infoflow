@@ -212,6 +212,7 @@ def infer_multiplex(
     contemporaneous=False,
     hyperedges=False,
     checkpoint=None,
+    device=None,
     prng=None,
 ):
     """
@@ -259,6 +260,11 @@ def infer_multiplex(
         ``contemporaneous`` variable (0 none, 1 undirected, 2 oriented source -> target).
     hyperedges : bool
         Add two-source PID hyperedges (:mod:`infoflow.hyperedges`) as ``network.hyperedges``.
+    device : {None, 'auto', 'cpu', 'mps', 'cuda'}
+        Evaluate the permutation nulls of parent selection in batches with the PyTorch
+        kernels of :mod:`infoflow.backend` (``'auto'`` prefers CUDA, then Apple MPS,
+        then the CPU). None keeps the NumPy/SciPy path. Layer estimation always runs
+        on the CPU.
     checkpoint : str, Path, or Checkpoint, None
         A directory where per-target skeletons and per-edge estimates are stored as
         they finish; rerunning with the same directory and seed resumes.
@@ -285,6 +291,10 @@ def infer_multiplex(
     if embeddings is None:
         embeddings = chosen if chosen is not None else Embedding(max_lag=max_lag or 3)
     settings = skeleton_settings or SkeletonSettings()
+    if device is not None:
+        import dataclasses
+
+        settings = dataclasses.replace(settings, device=device)
     selection_data, estimation_data = (discrete, discrete) if holdout is None else discrete.split_time(holdout)
     skeleton = infer_skeleton(selection_data, embeddings, targets, settings, rng, map_fn=map_fn, checkpoint=checkpoint)
 

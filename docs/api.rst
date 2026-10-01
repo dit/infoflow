@@ -54,6 +54,7 @@ Comparison and workflow
 
 .. automodule:: infoflow.compare
 .. automodule:: infoflow.parallel
+.. automodule:: infoflow.backend
 .. automodule:: infoflow.checkpoint
 .. automodule:: infoflow.io
 .. automodule:: infoflow.plot

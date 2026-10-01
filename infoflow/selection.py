@@ -101,6 +101,7 @@ class SkeletonSettings:
     ksg_k: int = 4
     ksg_threads: int | None = None
     ksg_null: str = "local"
+    device: str | None = None
 
     def check(self):
         for name in ("max_stat", "min_stat", "omnibus", "max_seq"):
@@ -191,6 +192,7 @@ class _Columns:
         self.y, self.Ky = _densify(self.r.present)
         self.n = len(self.y)
         self.map = map
+        self.device = None
 
     def column(self, v):
         return self.r.values[:, self.index[v]], self.alphabet[v]
@@ -208,6 +210,16 @@ class _Columns:
         Plug-in :math:`I[Y : c \\mid z]` in bits.
         """
         return _cmi(self.y, self.Ky, c, Kc, z, Kz)
+
+    def cmi_batch(self, c, Kc, z, Kz, idx):
+        """
+        :meth:`cmi` of ``c[i]`` for every permutation ``i`` in `idx`, batched on :attr:`device` if set.
+        """
+        if self.device is not None:
+            from .backend import plugin_cmi_batch
+
+            return plugin_cmi_batch(self.y, self.Ky, np.asarray(c)[np.asarray(idx)], Kc, z, Kz, self.device)
+        return np.array([self.cmi(c[i], Kc, z, Kz) for i in idx])
 
 
 class _KsgColumns:
@@ -244,6 +256,7 @@ class _KsgColumns:
             [[raw[i][j - lag, p] for p, lag in self.variables] for i, j in zip(trial, time, strict=True)]
         ).reshape(self.n, len(self.variables))
         self.k = k
+        self.device = None
         self._contexts = {}
         from concurrent.futures import ThreadPoolExecutor
 
@@ -257,6 +270,19 @@ class _KsgColumns:
 
     def column(self, v):
         return self._values[:, self.index[v]], 1
+
+    def cmi_batch(self, c, Kc, z, Kz, idx):
+        """
+        :meth:`cmi` of ``c[i]`` for every permutation ``i`` in `idx`: on :attr:`device`
+        by brute force if set, otherwise with the cached trees on the thread pool.
+        """
+        if self.device is not None:
+            from .backend import ksg_cmi_batch
+
+            c = np.asarray(c, dtype=float).reshape(self.n, -1)
+            z = np.asarray(z, dtype=float).reshape(self.n, -1)
+            return ksg_cmi_batch(c[np.asarray(idx)], self.y, z, self.k, self.device)
+        return np.array(list(self.map(lambda i: self.cmi(c[i], Kc, z, Kz), idx)))
 
     def local_permutation(self, z, rng, k_perm=5):
         """
@@ -418,12 +444,8 @@ def _max_statistic(cols, candidates, cond, n_perm, perm):
     z, Kz = cols.joint(cond)
     obs = list(cols.map(lambda v: cols.cmi(cols.column(v)[0], cols.alphabet[v], z, Kz), candidates))
     best = int(np.argmax(obs))
-    permutations = [perm(z) for _ in range(n_perm)]
-
-    def permuted(idx):
-        return max(cols.cmi(cols.column(v)[0][idx], cols.alphabet[v], z, Kz) for v in candidates)
-
-    null = np.array(list(cols.map(permuted, permutations)))
+    idx = [perm(z) for _ in range(n_perm)]
+    null = np.max([cols.cmi_batch(cols.column(v)[0], cols.alphabet[v], z, Kz, idx) for v in candidates], axis=0)
     return candidates[best], obs[best], _pvalue(null, obs[best])
 
 
@@ -451,19 +473,22 @@ def _pair_search(cols, candidates, cond, settings, perm):
     codes = [cols.joint([a, b]) for a, b in pairs]
     obs = list(cols.map(lambda code: cols.cmi(code[0], code[1], z, Kz), codes))
     best = int(np.argmax(obs))
-    permutations = [perm(z) for _ in range(settings.n_perm_pairs)]
-    null = np.array(list(cols.map(lambda idx: max(cols.cmi(c[idx], K, z, Kz) for c, K in codes), permutations)))
+    idx = [perm(z) for _ in range(settings.n_perm_pairs)]
+    null = np.max([cols.cmi_batch(c, K, z, Kz, idx) for c, K in codes], axis=0)
     if _pvalue(null, obs[best]) <= settings.alpha_pairs:
         return pairs[best]
     return None
 
 
 def _individual(cols, variables, cond, v, idx=None):
+    """
+    :math:`I[Y : v \\mid \\text{cond}, \\text{others}]`, or its values under the permutations `idx`.
+    """
     others = [u for u in variables if u != v]
     z, Kz = cols.joint(cond + others)
     c, a = cols.column(v)
     if idx is not None:
-        c = c[idx]
+        return cols.cmi_batch(c, a, z, Kz, idx)
     return cols.cmi(c, a, z, Kz)
 
 
@@ -472,12 +497,8 @@ def _prune(cols, sources, cond, n_perm, alpha, perm):
     while sources:
         obs = list(cols.map(lambda v, sources=sources: _individual(cols, sources, cond, v), sources))
         k = int(np.argmin(obs))
-        permutations = [perm() for _ in range(n_perm)]
-
-        def permuted(idx, sources=sources):
-            return min(_individual(cols, sources, cond, v, idx) for v in sources)
-
-        null = np.array(list(cols.map(permuted, permutations)))
+        idx = [perm() for _ in range(n_perm)]
+        null = np.min([_individual(cols, sources, cond, v, idx) for v in sources], axis=0)
         if _pvalue(null, obs[k]) <= alpha:
             break
         sources.pop(k)
@@ -487,12 +508,9 @@ def _prune(cols, sources, cond, n_perm, alpha, perm):
 def _sequential(cols, sources, cond, n_perm, alpha, perm):
     obs = np.array(list(cols.map(lambda v: _individual(cols, sources, cond, v), sources)))
     order = np.argsort(-obs)
-    permutations = [perm() for _ in range(n_perm)]
-
-    def permuted(idx):
-        return np.sort([_individual(cols, sources, cond, v, idx) for v in sources])[::-1]
-
-    null = np.array(list(cols.map(permuted, permutations))).reshape(n_perm, len(sources))
+    idx = [perm() for _ in range(n_perm)]
+    per_source = np.stack([_individual(cols, sources, cond, v, idx) for v in sources], axis=1)
+    null = np.sort(per_source, axis=1)[:, ::-1]
     pvalues = {}
     failed = False
     for rank, k in enumerate(order):
@@ -561,6 +579,10 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         cols = _KsgColumns(data, target, everything, max_lag, k=settings.ksg_k, threads=settings.ksg_threads, prng=rng)
     else:
         cols = _Columns(data, target, everything, max_lag)
+    if settings.device is not None:
+        from .backend import resolve_device
+
+        cols.device = resolve_device(settings.device)
     result = TargetSkeleton(target=target, conditionals=conditionals, n_samples=cols.n)
     if cols.n < 10:
         return result
@@ -615,8 +637,8 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         s, Ks = cols.joint(selected)
         z, Kz = cols.joint(base)
         result.omnibus_te = cols.cmi(s, Ks, z, Kz)
-        permutations = [perm(z) for _ in range(settings.n_perm_omnibus)]
-        null = np.array(list(cols.map(lambda idx: cols.cmi(s[idx], Ks, z, Kz), permutations)))
+        idx = [perm(z) for _ in range(settings.n_perm_omnibus)]
+        null = cols.cmi_batch(s, Ks, z, Kz, idx)
         result.omnibus_pvalue = _pvalue(null, result.omnibus_te)
         result.source_pvalues = _sequential(cols, selected, base, settings.n_perm_max_seq, settings.alpha_max_seq, perm)
         result.sources = [v for v in selected if result.source_pvalues[v] <= settings.alpha_max_seq]

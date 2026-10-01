@@ -32,6 +32,7 @@ and false-discovery-rate control.
    skeleton
    interpretation
    workflow
+   gpu
    benchmarks
    api
    zreferences
