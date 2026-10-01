@@ -63,7 +63,7 @@ class SkeletonSettings:
     threads, default all cores) :cite:`Kraskov2004,Frenzel2007`, as IDTxl does,
     instead of the plug-in estimate on symbols. The target is then offered its own
     past up to ``max_source_lag`` (IDTxl's ``max_lag_target``), since KSG resolves
-    memory beyond the symbolic lag budget. With ``ksg_null='local'`` the inclusion,
+    memory beyond the symbolic lag budget. With ``ksg_null='local'`` (the default) the inclusion,
     pair, and omnibus nulls use Runge's local permutation in the conditioning set
     :cite:`Runge2018` instead of a free permutation: a candidate keeps its dependence
     on what is conditioned on, so a redundant proxy for the target's own past (such
@@ -100,7 +100,7 @@ class SkeletonSettings:
     estimator: str = "plugin"
     ksg_k: int = 4
     ksg_threads: int | None = None
-    ksg_null: str = "permutation"
+    ksg_null: str = "local"
 
     def check(self):
         for name in ("max_stat", "min_stat", "omnibus", "max_seq"):
