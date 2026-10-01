@@ -25,6 +25,9 @@ evidence, not asserted:
   with no significant intrinsic flow, and no observed variable or reverse coupling
   that explains it;
 * ``unexplained-tdmi``: a shared-only candidate that nothing observed explains;
+* ``layers-unconfirmed``: a selected parent whose intrinsic and synergistic layers are
+  both non-significant, e.g. a weak edge that a continuous (KSG) selection resolves
+  but the symbol-based layer estimates cannot;
 * ``bidirectional``: significant flow in both directions;
 * ``zero-lag``: the source's present is significantly informative about the
   target's present given the lagged context, by more than the transfer entropy;
@@ -282,6 +285,8 @@ def latent_flags(
         kind = str(dataset["kind"].values[s, t])
         if kind == "shared_candidate" and unexplained:
             f.append("unexplained-tdmi")
+        if kind == "parent" and not (g("intrinsic", s, t) or g("synergistic", s, t)):
+            f.append("layers-unconfirmed")
         forward = g("intrinsic", s, t) or g("synergistic", s, t)
         backward = (t, s) in edges and (g("intrinsic", t, s) or g("synergistic", t, s))
         if forward and backward:

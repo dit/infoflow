@@ -4,6 +4,7 @@ Phase 2 milestone: multiplex networks on benchmarks with known structure.
 
 import networkx as nx
 import numpy as np
+import pytest
 
 from infoflow import datasets
 from infoflow.network import infer_multiplex
@@ -87,3 +88,26 @@ def test_holdout_runs():
     assert _sig(net, "intrinsic", 0, 1)
     assert net.settings["holdout"] == 0.5
     assert net.edges[(0, 1)].flow.n_samples < 2000
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: datasets.common_driver(3000, seed=0),
+        lambda: datasets.chain(3000, seed=1),
+        lambda: datasets.orthogonal_features(3000, seed=2),
+    ],
+)
+def test_layers_respect_te_bound_and_flag_unconfirmed_parents(make):
+    """
+    Intrinsic and synergistic flow are at most TE: never significant on edges whose TE
+    selection rejected; parents with neither layer significant are flagged.
+    """
+    net = infer_multiplex(make(), max_lag=3, prng=0)
+    ds = net.dataset
+    parent = ds["kind"].values == "parent"
+    intrinsic = ds["significant"].sel(layer="intrinsic").values
+    synergistic = ds["significant"].sel(layer="synergistic").values
+    assert not ((intrinsic | synergistic) & ~parent).any()
+    unconfirmed = np.char.find(ds["flags"].values.astype(str), "layers-unconfirmed") >= 0
+    assert np.array_equal(unconfirmed, parent & ~intrinsic & ~synergistic)

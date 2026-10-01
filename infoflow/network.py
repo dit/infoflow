@@ -424,6 +424,11 @@ def _assemble(data, names, skeleton, results, alpha, fdr_dependent):
     for layer in LAYERS:
         i = EDGE_LAYERS.index(layer)
         sig[i], q[i] = significant[layer], adjusted[layer]
+    # Intrinsic and synergistic flow are each at most the transfer entropy, so neither is
+    # significant where parent selection found no significant transfer entropy.
+    selected = kind == "parent"
+    for layer in ("intrinsic", "synergistic"):
+        sig[EDGE_LAYERS.index(layer)] &= selected
     # TE and TDMI rows: significant when their component layers are.
     sig[0] = sig[EDGE_LAYERS.index("intrinsic")] | sig[EDGE_LAYERS.index("synergistic")]
     sig[1] = sig[EDGE_LAYERS.index("intrinsic")] | sig[EDGE_LAYERS.index("shared")]

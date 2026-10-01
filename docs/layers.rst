@@ -43,6 +43,13 @@ Statistics
 With ``adaptive_resamples=True`` the number of null resamples grows with the number
 of tests so that the smallest attainable p-value can survive the correction.
 
+Intrinsic and synergistic flow are each at most the transfer entropy, so on edges
+whose transfer entropy parent selection found non-significant (shared-only
+candidates) neither layer is declared significant, whatever its own test says; the
+estimates and p-values are still reported. Conversely, a selected parent whose
+intrinsic and synergistic layers are both non-significant is flagged
+``layers-unconfirmed``.
+
 Validation
 ----------
 
