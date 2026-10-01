@@ -61,7 +61,13 @@ class SkeletonSettings:
     ``estimator='ksg'`` runs parent selection on the raw continuous values with the
     KSG conditional mutual information (``ksg_k`` neighbours, ``ksg_threads``
     threads, default all cores) :cite:`Kraskov2004,Frenzel2007`, as IDTxl does,
-    instead of the plug-in estimate on symbols. Conditioning on a parent
+    instead of the plug-in estimate on symbols. The target is then offered its own
+    past up to ``max_source_lag`` (IDTxl's ``max_lag_target``), since KSG resolves
+    memory beyond the symbolic lag budget. With ``ksg_null='local'`` the inclusion,
+    pair, and omnibus nulls use Runge's local permutation in the conditioning set
+    :cite:`Runge2018` instead of a free permutation: a candidate keeps its dependence
+    on what is conditioned on, so a redundant proxy for the target's own past (such
+    as a child of the target) is not mistaken for a parent. Conditioning on a parent
     continuously removes its influence exactly, where bins leave a residue inside
     each bin that can hide weak edges; the layers are still estimated on symbols.
     It is much slower.
@@ -94,6 +100,7 @@ class SkeletonSettings:
     estimator: str = "plugin"
     ksg_k: int = 4
     ksg_threads: int | None = None
+    ksg_null: str = "permutation"
 
     def check(self):
         for name in ("max_stat", "min_stat", "omnibus", "max_seq"):
@@ -102,6 +109,8 @@ class SkeletonSettings:
             check_n_perm(self.n_perm_pairs, self.alpha_pairs)
         if self.tdmi_screen:
             check_n_perm(self.n_perm_tdmi, self.alpha_tdmi)
+        if self.ksg_null not in ("permutation", "local"):
+            raise ValueError("ksg_null must be 'permutation' or 'local'")
         if self.estimator not in ("plugin", "ksg"):
             raise ValueError("estimator must be 'plugin' or 'ksg'")
         if self.fdr_constant not in (1, 2):
@@ -249,6 +258,33 @@ class _KsgColumns:
     def column(self, v):
         return self._values[:, self.index[v]], 1
 
+    def local_permutation(self, z, rng, k_perm=5):
+        """
+        Indices of Runge's local permutation in `z` :cite:`Runge2018`: each sample takes
+        a distinct sample among its `k_perm` nearest neighbours in the conditioning set,
+        so a candidate keeps its dependence on the conditioning set under the null.
+        """
+        from scipy.spatial import KDTree
+
+        z = np.asarray(z, dtype=float).reshape(self.n, -1)
+        if z.shape[1] == 0:
+            return rng.permutation(self.n)
+        key = ("neighbors", z.shape, hash(z.tobytes()))
+        if key not in self._contexts:
+            self._contexts[key] = KDTree(z).query(z, k_perm, p=np.inf, workers=-1)[1].reshape(self.n, -1)
+        neighbors = self._contexts[key]
+        used = np.zeros(self.n, dtype=bool)
+        choice = np.empty(self.n, dtype=np.int64)
+        order = rng.permutation(self.n)
+        shuffles = rng.random(neighbors.shape)
+        for i in order:
+            candidates = neighbors[i][np.argsort(shuffles[i])]
+            free = candidates[~used[candidates]]
+            j = free[0] if len(free) else candidates[0]
+            used[j] = True
+            choice[i] = j
+        return choice
+
     def joint(self, variables):
         cols = [self.index[v] for v in variables]
         return self._values[:, cols], len(cols)
@@ -290,7 +326,7 @@ class _KsgColumns:
         return max(float(value) / np.log(2), 0.0)
 
 
-def _permuter(columns, settings, rng):
+def _base_permuter(columns, settings, rng):
     """
     A function returning a permutation of realization indices, per the surrogate scheme.
 
@@ -363,6 +399,18 @@ def _pvalue(null, observed, tol=1e-12):
     return float((1 + np.sum(null >= observed - tol)) / (1 + len(null)))
 
 
+def _permuter(columns, settings, rng):
+    """
+    A permuter that accepts (and ignores) the conditioning set, like the local one.
+    """
+    base = _base_permuter(columns, settings, rng)
+
+    def perm(z=None):
+        return base()
+
+    return perm
+
+
 def _max_statistic(cols, candidates, cond, n_perm, perm):
     """
     The best candidate, its CMI, and the max-statistic p-value.
@@ -370,7 +418,7 @@ def _max_statistic(cols, candidates, cond, n_perm, perm):
     z, Kz = cols.joint(cond)
     obs = list(cols.map(lambda v: cols.cmi(cols.column(v)[0], cols.alphabet[v], z, Kz), candidates))
     best = int(np.argmax(obs))
-    permutations = [perm() for _ in range(n_perm)]
+    permutations = [perm(z) for _ in range(n_perm)]
 
     def permuted(idx):
         return max(cols.cmi(cols.column(v)[0][idx], cols.alphabet[v], z, Kz) for v in candidates)
@@ -403,7 +451,7 @@ def _pair_search(cols, candidates, cond, settings, perm):
     codes = [cols.joint([a, b]) for a, b in pairs]
     obs = list(cols.map(lambda code: cols.cmi(code[0], code[1], z, Kz), codes))
     best = int(np.argmax(obs))
-    permutations = [perm() for _ in range(settings.n_perm_pairs)]
+    permutations = [perm(z) for _ in range(settings.n_perm_pairs)]
     null = np.array(list(cols.map(lambda idx: max(cols.cmi(c[idx], K, z, Kz) for c, K in codes), permutations)))
     if _pvalue(null, obs[best]) <= settings.alpha_pairs:
         return pairs[best]
@@ -493,11 +541,16 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     embeddings = embeddings or Embedding()
     P = data.n_processes
     sources = [p for p in range(P) if p != target] if sources is None else list(sources)
-    target_cands = [(target, lag) for lag in candidate_lags(data, embeddings, target)]
     # Coupling delays can exceed a source's own memory, so source lags extend to
     # max_source_lag (IDTxl's max_lag_sources; default the larger of 5 and the largest
     # lag budget in the network), on each source's own grid.
     source_max = settings.max_source_lag or max(5, _max_budget(embeddings, P))
+    if settings.estimator == "ksg":
+        # KSG resolves the target's own past finely enough that memory beyond the symbolic
+        # lag budget matters; offer the target the source lag range (IDTxl's max_lag_target).
+        target_cands = [(target, lag) for lag in _source_lags(data, embeddings, target, source_max)]
+    else:
+        target_cands = [(target, lag) for lag in candidate_lags(data, embeddings, target)]
     source_cands = [(p, lag) for p in sources for lag in _source_lags(data, embeddings, p, source_max)]
     conditionals = [tuple(v) for v in settings.forced_conditionals]
     if settings.faes:
@@ -512,6 +565,11 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     if cols.n < 10:
         return result
     perm = _permuter(cols, settings, rng)
+    if isinstance(cols, _KsgColumns) and settings.ksg_null == "local":
+        free, ksg = perm, cols
+
+        def perm(z=None):
+            return ksg.local_permutation(z, rng) if z is not None else free()
 
     past = _greedy(cols, target_cands, conditionals, settings.n_perm_max_stat, settings.alpha_max_stat, perm)
     selected = []
@@ -557,7 +615,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         s, Ks = cols.joint(selected)
         z, Kz = cols.joint(base)
         result.omnibus_te = cols.cmi(s, Ks, z, Kz)
-        permutations = [perm() for _ in range(settings.n_perm_omnibus)]
+        permutations = [perm(z) for _ in range(settings.n_perm_omnibus)]
         null = np.array(list(cols.map(lambda idx: cols.cmi(s[idx], Ks, z, Kz), permutations)))
         result.omnibus_pvalue = _pvalue(null, result.omnibus_te)
         result.source_pvalues = _sequential(cols, selected, base, settings.n_perm_max_seq, settings.alpha_max_seq, perm)

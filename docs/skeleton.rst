@@ -24,3 +24,13 @@ shuffles when there are trials, otherwise circular, block, or local permutations
 
 Selection and estimation can use disjoint halves of the data (``holdout``) to
 avoid post-selection bias in the layer estimates.
+
+For continuous data, ``SkeletonSettings(estimator="ksg")`` selects parents with the
+KSG conditional mutual information on the raw values :cite:`Kraskov2004,Frenzel2007`,
+as IDTxl does. Conditioning on a parent continuously removes its influence where bins
+leave a residue, so weak edges into strongly driven targets can be found (see
+:doc:`benchmarks`); the layers are still estimated on symbols. Permutations run on
+all cores (``ksg_threads``) and reuse the trees of each conditioning set. Use
+``ksg_null="local"`` for Runge's local-permutation nulls :cite:`Runge2018`, which keep
+a candidate's dependence on the conditioning set and so keep children of a target
+out of its parent set.

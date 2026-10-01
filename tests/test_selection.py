@@ -143,3 +143,22 @@ def test_ksg_selection_on_raw_values():
         select_parents(
             DiscreteData.from_discrete([np.stack([x > 0, y > 0], axis=1).astype(int)]), 1, None, None, settings, 0
         )
+
+
+def test_ksg_local_null_keeps_children_out_of_parent_sets():
+    from infoflow.preprocess import preprocess
+
+    rng = np.random.default_rng(6)
+    n = 800
+    x, child = np.zeros(n), np.zeros(n)
+    for t in range(1, n):
+        x[t] = 0.9 * x[t - 1] + rng.normal()
+        child[t] = x[t - 1] + 0.3 * rng.normal()
+    result = preprocess(np.stack([x, child], axis=1), max_lag=2, prng=0)
+    settings = dataclasses.replace(
+        SkeletonSettings(**FAST), estimator="ksg", ksg_null="local", synergy_search=False, tdmi_screen=False
+    )
+    assert select_parents(result.data, 0, result.embeddings, None, settings, 0).sources == []
+    assert select_parents(result.data, 1, result.embeddings, None, settings, 0).parents() == [0]
+    with pytest.raises(ValueError, match="ksg_null"):
+        SkeletonSettings(ksg_null="nearby").check()
