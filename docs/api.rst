@@ -20,6 +20,7 @@ Preprocessing
 .. automodule:: infoflow.preprocess.delays
 .. automodule:: infoflow.preprocess.scoring
 .. automodule:: infoflow.preprocess.scaling
+.. automodule:: infoflow.adaptive
 
 Edge measures and statistics
 ----------------------------

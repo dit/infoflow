@@ -35,5 +35,7 @@ and false-discovery-rate control.
    workflow
    gpu
    benchmarks
+   discretization
+   validation
    api
    zreferences

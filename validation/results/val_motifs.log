@@ -1,0 +1,6 @@
+  1.00  xor: both edges synergistic
+  1.00  common driver: z edges intrinsic
+  1.00  common driver: x->y shared only
+  1.00  common driver: x->y confounded
+  1.00  chain: a->c not intrinsic
+  0.90  chain: a->c mediated
