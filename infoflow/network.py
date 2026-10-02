@@ -157,9 +157,16 @@ def _interaction_delay(cols, x_vars, w_vars):
     return int(best[1])
 
 
-def estimate_edge(data, target, x_vars, w_vars, estimator="miller_madow", n_boot=100, n_null=100, prng=None):
+def estimate_edge(
+    data, target, x_vars, w_vars, estimator="miller_madow", n_boot=100, n_null=100, prng=None, adaptive=None
+):
     """
     Layer statistics for one edge given its source and context variables.
+
+    With `adaptive` (``(target_bins, candidate_bins)``), the layers are estimated on
+    adaptive symbols from the raw series: the target and source in fixed equal-frequency
+    bins of their ranks, the context in the MDL partition learned with the target
+    (:class:`~infoflow.selection._AdaptiveColumns`), instead of the preprocessing symbols.
 
     Returns
     -------
@@ -168,10 +175,17 @@ def estimate_edge(data, target, x_vars, w_vars, estimator="miller_madow", n_boot
     """
     variables = list(dict.fromkeys(list(x_vars) + list(w_vars)))
     max_lag = max((v[1] for v in variables), default=0)
-    r = realizations(data, target, variables, max_lag=max_lag)
-    x = r.columns(list(x_vars))
-    w = r.columns(list(w_vars)) if w_vars else None
-    stats = layer_statistics(r.present, x, w, n_boot=n_boot, n_null=n_null, estimator=estimator, gap=max_lag, prng=prng)
+    if adaptive is not None:
+        from .selection import _AdaptiveColumns
+
+        acols = _AdaptiveColumns(data, target, variables, max_lag, *adaptive)
+        y, x = acols.y, acols.joint(list(x_vars))[0]
+        w = acols.context(list(w_vars))[0] if w_vars else None
+    else:
+        r = realizations(data, target, variables, max_lag=max_lag)
+        y, x = r.present, r.columns(list(x_vars))
+        w = r.columns(list(w_vars)) if w_vars else None
+    stats = layer_statistics(y, x, w, n_boot=n_boot, n_null=n_null, estimator=estimator, gap=max_lag, prng=prng)
     cols = _Columns(data, target, variables, max_lag)
     return stats, _interaction_delay(cols, list(x_vars), list(w_vars))
 
@@ -216,6 +230,7 @@ def infer_multiplex(
     max_sources=3,
     checkpoint=None,
     device=None,
+    layer_symbols="preprocessed",
     prng=None,
 ):
     """
@@ -273,6 +288,11 @@ def infer_multiplex(
         kernels of :mod:`infoflow.backend` (``'auto'`` prefers CUDA, then Apple MPS,
         then the CPU). None keeps the NumPy/SciPy path. Layer estimation always runs
         on the CPU.
+    layer_symbols : {'preprocessed', 'adaptive'}
+        Estimate the layers on the preprocessing symbols, or on adaptive symbols learned
+        per edge from the raw series (the context partitioned by MDL together with the
+        target, as in ``SkeletonSettings(estimator='adaptive')``), which resolves a
+        strongly nonlinear parent in the context finely enough to expose weak edges.
     checkpoint : str, Path, or Checkpoint, None
         A directory where per-target skeletons and per-edge estimates are stored as
         they finish; rerunning with the same directory and seed resumes.
@@ -299,6 +319,11 @@ def infer_multiplex(
     if embeddings is None:
         embeddings = chosen if chosen is not None else Embedding(max_lag=max_lag or 3)
     settings = skeleton_settings or SkeletonSettings()
+    if layer_symbols not in ("preprocessed", "adaptive"):
+        raise ValueError("layer_symbols must be 'preprocessed' or 'adaptive'")
+    adaptive_layers = (
+        (settings.adaptive_target_bins, settings.adaptive_candidate_bins) if layer_symbols == "adaptive" else None
+    )
     if device is not None:
         import dataclasses
 
@@ -338,7 +363,9 @@ def infer_multiplex(
         (p, t, x_vars, w_vars, kind), seed = job
 
         def compute():
-            return estimate_edge(estimation_data, t, x_vars, w_vars, estimator, n_boot, n_null, int(seed))
+            return estimate_edge(
+                estimation_data, t, x_vars, w_vars, estimator, n_boot, n_null, int(seed), adaptive=adaptive_layers
+            )
 
         stats, delay = compute() if checkpoint is None else checkpoint.cached(f"edge-{p}-{t}-{kind}", compute)
         return (p, t), (stats, delay, kind)
@@ -398,6 +425,7 @@ def infer_multiplex(
         "interpret": interpret,
         "contemporaneous": contemporaneous,
         "hyperedges": hyperedges,
+        "layer_symbols": layer_symbols,
         "hyperedge_measure": str(hyperedge_measure),
         "max_sources": max_sources,
         "max_lag": max_lag,

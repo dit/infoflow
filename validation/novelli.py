@@ -23,7 +23,9 @@ def main():
     parser.add_argument("--reps", type=int, default=3)
     parser.add_argument("--in-degree", type=float, default=3.0, help="0 gives empty networks (false-positive rate)")
     parser.add_argument("--alpha", type=float, default=0.01, help="significance level of every selection stage")
-    parser.add_argument("--estimator", choices=("plugin", "ksg"), default="plugin")
+    parser.add_argument("--estimator", choices=("plugin", "ksg", "adaptive"), default="plugin")
+    parser.add_argument("--null", choices=("free", "strata"), default="free", help="selection null (plug-in/adaptive)")
+    parser.add_argument("--statistic", choices=("raw", "debiased"), default="raw", help="selection statistic")
     parser.add_argument("--threads", type=int, default=8, help="targets inferred in parallel")
     parser.add_argument("--device", default=None, help="batched kernels: cpu, mps, cuda, or auto (default: NumPy path)")
     parser.add_argument("--seed", type=int, default=0)
@@ -33,6 +35,8 @@ def main():
     n_perm = max(200, int(np.ceil(2 / args.alpha)))
     settings = SkeletonSettings(
         estimator=args.estimator,
+        null=args.null,
+        statistic=args.statistic,
         **{f"alpha_{s}": args.alpha for s in ("max_stat", "min_stat", "omnibus", "max_seq")},
         **{f"n_perm_{s}": n_perm for s in ("max_stat", "min_stat", "omnibus", "max_seq")},
     )
@@ -45,7 +49,14 @@ def main():
         infer_kwargs={"skeleton_settings": settings, "map_fn": thread_map(args.threads), "device": args.device},
         prng=args.seed,
     )
-    ds.attrs.update(alpha=args.alpha, estimator=args.estimator, n_perm=n_perm, device=str(args.device))
+    ds.attrs.update(
+        alpha=args.alpha,
+        estimator=args.estimator,
+        null=args.null,
+        statistic=args.statistic,
+        n_perm=n_perm,
+        device=str(args.device),
+    )
     print(ds[["precision", "recall", "specificity", "lag_error", "runtime"]].mean("rep").to_dataframe().round(3))
     if args.out:
         ds.to_netcdf(args.out, engine="scipy")

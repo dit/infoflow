@@ -98,6 +98,10 @@ class SkeletonSettings:
     fdr: bool = True
     fdr_constant: int = 1
     estimator: str = "plugin"
+    null: str = "free"
+    statistic: str = "raw"
+    adaptive_target_bins: int = 6
+    adaptive_candidate_bins: int = 4
     ksg_k: int = 4
     ksg_threads: int | None = None
     ksg_null: str = "local"
@@ -112,8 +116,12 @@ class SkeletonSettings:
             check_n_perm(self.n_perm_tdmi, self.alpha_tdmi)
         if self.ksg_null not in ("permutation", "local"):
             raise ValueError("ksg_null must be 'permutation' or 'local'")
-        if self.estimator not in ("plugin", "ksg"):
-            raise ValueError("estimator must be 'plugin' or 'ksg'")
+        if self.estimator not in ("plugin", "ksg", "adaptive"):
+            raise ValueError("estimator must be 'plugin', 'ksg', or 'adaptive'")
+        if self.null not in ("free", "strata"):
+            raise ValueError("null must be 'free' or 'strata'")
+        if self.statistic not in ("raw", "debiased"):
+            raise ValueError("statistic must be 'raw' or 'debiased'")
         if self.fdr_constant not in (1, 2):
             raise ValueError("fdr_constant must be 1 (Benjamini-Hochberg) or 2 (Benjamini-Yekutieli)")
 
@@ -205,6 +213,12 @@ class _Columns:
             code, K = _combine(code, K, c, a)
         return code, K
 
+    def context(self, variables):
+        """
+        The joint code of a conditioning set (the same as :meth:`joint` here).
+        """
+        return self.joint(variables)
+
     def cmi(self, c, Kc, z, Kz):
         """
         Plug-in :math:`I[Y : c \\mid z]` in bits.
@@ -220,6 +234,92 @@ class _Columns:
 
             return plugin_cmi_batch(self.y, self.Ky, np.asarray(c)[np.asarray(idx)], Kc, z, Kz, self.device)
         return np.array([self.cmi(c[i], Kc, z, Kz) for i in idx])
+
+
+def _raw_columns(data, r, target):
+    """
+    Raw values of a realization set: the target's present and one column per variable.
+    """
+    if data.raw is None:
+        raise ValueError("this estimator needs the raw series; pass continuous data (not DiscreteData).")
+    trial, time = r.trial, r.time
+    y = np.array([data.raw[i][j, target] for i, j in zip(trial, time, strict=True)], dtype=float)
+    values = np.array(
+        [[data.raw[i][j - lag, p] for p, lag in r.variables] for i, j in zip(trial, time, strict=True)], dtype=float
+    ).reshape(len(y), len(r.variables))
+    return y, values
+
+
+def _ranks(v):
+    from scipy.stats import rankdata
+
+    return (rankdata(v) - 0.5) / len(v)
+
+
+def _equal_frequency(ranks, bins):
+    return np.minimum((ranks * bins).astype(np.int64), bins - 1)
+
+
+class _AdaptiveColumns(_Columns):
+    """
+    Symbols for adaptive conditioning :cite:`Kontkanen2007,Marx2021`.
+
+    The target's present and every candidate are cut into fixed equal-frequency bins of
+    their ranks; a conditioning set is cut by a greedy MDL joint histogram learned
+    together with the (fixed) target bins (:func:`~infoflow.adaptive.joint_histogram`),
+    so it is resolved finely exactly where it changes the target. No partition depends
+    on how a candidate is paired with the target, so permuting candidates gives a valid
+    null. Partitions are cached per conditioning set.
+    """
+
+    def __init__(self, data, target, variables, max_lag, target_bins=6, candidate_bins=4):
+        self.r = realizations(data, target, variables, max_lag=max_lag)
+        self.variables = list(self.r.variables)
+        self.index = {v: i for i, v in enumerate(self.variables)}
+        y, values = _raw_columns(data, self.r, target)
+        self._y_ranks = _ranks(y)
+        self._ranked = (
+            np.column_stack([_ranks(values[:, i]) for i in range(values.shape[1])]) if values.size else values
+        )
+        self.y, self.Ky = _equal_frequency(self._y_ranks, target_bins), target_bins
+        self._codes = _equal_frequency(self._ranked, candidate_bins) if values.size else values.astype(np.int64)
+        self.alphabet = dict.fromkeys(self.variables, candidate_bins)
+        self.target_bins = target_bins
+        self.n = len(self.y)
+        self.map = map
+        self.device = None
+        self._contexts = {}
+        self._cuts = {}
+
+    def column(self, v):
+        return self._codes[:, self.index[v]], self.alphabet[v]
+
+    def context(self, variables):
+        """
+        The adaptive joint code of a conditioning set, warm-started from the cached
+        partition sharing the most variables (or built up one variable at a time).
+        """
+        from .adaptive import codes, joint_histogram
+        from .measures import dense_codes
+
+        if not variables:
+            return np.zeros(self.n, dtype=np.int64), 1
+        key = tuple(variables)
+        if key not in self._contexts:
+            known = {}
+            best = max(self._cuts, key=lambda k: len(set(k) & set(key)), default=None)
+            if best is not None and set(best) & set(key):
+                known = self._cuts[best]
+            elif len(key) > 2:
+                self.context(list(key[:-1]))
+                known = self._cuts[key[:-1]]
+            columns = [self._ranked[:, self.index[v]] for v in variables]
+            initial = [None] + [known.get(v) for v in variables] if known else None
+            cuts = joint_histogram([self._y_ranks, *columns], fixed={0: self.target_bins}, initial=initial)
+            self._cuts[key] = dict(zip(variables, cuts[1:], strict=True))
+            binned = np.stack([codes(c, k) for c, k in zip(columns, cuts[1:], strict=True)], axis=1)
+            self._contexts[key] = dense_codes(binned)
+        return self._contexts[key]
 
 
 class _KsgColumns:
@@ -314,6 +414,9 @@ class _KsgColumns:
     def joint(self, variables):
         cols = [self.index[v] for v in variables]
         return self._values[:, cols], len(cols)
+
+    def context(self, variables):
+        return self.joint(variables)
 
     def _context(self, z):
         from scipy.spatial import KDTree
@@ -437,23 +540,38 @@ def _permuter(columns, settings, rng):
     return perm
 
 
-def _max_statistic(cols, candidates, cond, n_perm, perm):
+def _centers(nulls, debiased):
+    """
+    Per-candidate null means (for bias-corrected statistics), or zeros.
+    """
+    return nulls.mean(axis=1) if debiased else np.zeros(len(nulls))
+
+
+def _max_statistic(cols, candidates, cond, n_perm, perm, debiased=False):
     """
     The best candidate, its CMI, and the max-statistic p-value.
+
+    With `debiased`, candidates are ranked by their CMI minus the mean of their own
+    null, and the null maximum is taken over equally centered values: plug-in biases
+    differ between candidates (they depend on how each relates to the conditioning
+    set), so the raw maximum can favour the most biased candidate over the most
+    informative one.
     """
-    z, Kz = cols.joint(cond)
-    obs = list(cols.map(lambda v: cols.cmi(cols.column(v)[0], cols.alphabet[v], z, Kz), candidates))
-    best = int(np.argmax(obs))
+    z, Kz = cols.context(cond)
+    obs = np.array(list(cols.map(lambda v: cols.cmi(cols.column(v)[0], cols.alphabet[v], z, Kz), candidates)))
     idx = [perm(z) for _ in range(n_perm)]
-    null = np.max([cols.cmi_batch(cols.column(v)[0], cols.alphabet[v], z, Kz, idx) for v in candidates], axis=0)
-    return candidates[best], obs[best], _pvalue(null, obs[best])
+    nulls = np.array([cols.cmi_batch(cols.column(v)[0], cols.alphabet[v], z, Kz, idx) for v in candidates])
+    shift = _centers(nulls, debiased)
+    best = int(np.argmax(obs - shift))
+    null = (nulls - shift[:, None]).max(axis=0)
+    return candidates[best], float(obs[best]), _pvalue(null, obs[best] - shift[best])
 
 
-def _greedy(cols, candidates, cond, n_perm, alpha, perm):
+def _greedy(cols, candidates, cond, n_perm, alpha, perm, debiased=False):
     selected = []
     candidates = list(candidates)
     while candidates:
-        best, _, p = _max_statistic(cols, candidates, cond + selected, n_perm, perm)
+        best, _, p = _max_statistic(cols, candidates, cond + selected, n_perm, perm, debiased)
         if p > alpha:
             break
         selected.append(best)
@@ -462,6 +580,7 @@ def _greedy(cols, candidates, cond, n_perm, alpha, perm):
 
 
 def _pair_search(cols, candidates, cond, settings, perm):
+    debiased = settings.statistic == "debiased"
     """
     The best pair of candidates (by joint CMI) if it passes a max statistic over pairs.
     """
@@ -469,48 +588,66 @@ def _pair_search(cols, candidates, cond, settings, perm):
     pairs = [(a, b) for a, b in combinations(pool, 2) if a[0] != b[0] or a[1] != b[1]]
     if not pairs:
         return None
-    z, Kz = cols.joint(cond)
+    z, Kz = cols.context(cond)
     codes = [cols.joint([a, b]) for a, b in pairs]
-    obs = list(cols.map(lambda code: cols.cmi(code[0], code[1], z, Kz), codes))
-    best = int(np.argmax(obs))
+    obs = np.array(list(cols.map(lambda code: cols.cmi(code[0], code[1], z, Kz), codes)))
     idx = [perm(z) for _ in range(settings.n_perm_pairs)]
-    null = np.max([cols.cmi_batch(c, K, z, Kz, idx) for c, K in codes], axis=0)
-    if _pvalue(null, obs[best]) <= settings.alpha_pairs:
+    nulls = np.array([cols.cmi_batch(c, K, z, Kz, idx) for c, K in codes])
+    shift = _centers(nulls, debiased)
+    best = int(np.argmax(obs - shift))
+    null = (nulls - shift[:, None]).max(axis=0)
+    if _pvalue(null, obs[best] - shift[best]) <= settings.alpha_pairs:
         return pairs[best]
     return None
 
 
-def _individual(cols, variables, cond, v, idx=None):
+def _individual(cols, variables, cond, v, idx=None, perm=None, n_perm=0):
     """
-    :math:`I[Y : v \\mid \\text{cond}, \\text{others}]`, or its values under the permutations `idx`.
+    :math:`I[Y : v \\mid \\text{cond}, \\text{others}]`, or its values under permutations:
+    the shared indices `idx`, or `n_perm` fresh draws of `perm` given this conditioning set.
     """
     others = [u for u in variables if u != v]
-    z, Kz = cols.joint(cond + others)
+    z, Kz = cols.context(cond + others)
     c, a = cols.column(v)
+    if perm is not None:
+        idx = [perm(z) for _ in range(n_perm)]
     if idx is not None:
         return cols.cmi_batch(c, a, z, Kz, idx)
     return cols.cmi(c, a, z, Kz)
 
 
-def _prune(cols, sources, cond, n_perm, alpha, perm):
+def _per_source_nulls(cols, sources, cond, n_perm, perm):
+    """
+    Null CMIs ``(n_perm, len(sources))``: one permutation shared by all sources, or, for
+    conditioning-aware permutations, draws given each source's own conditioning set.
+    """
+    if getattr(perm, "uses_condition", False):
+        return np.stack([_individual(cols, sources, cond, v, perm=perm, n_perm=n_perm) for v in sources], axis=1)
+    idx = [perm() for _ in range(n_perm)]
+    return np.stack([_individual(cols, sources, cond, v, idx) for v in sources], axis=1)
+
+
+def _prune(cols, sources, cond, n_perm, alpha, perm, debiased=False):
     sources = list(sources)
     while sources:
-        obs = list(cols.map(lambda v, sources=sources: _individual(cols, sources, cond, v), sources))
-        k = int(np.argmin(obs))
-        idx = [perm() for _ in range(n_perm)]
-        null = np.min([_individual(cols, sources, cond, v, idx) for v in sources], axis=0)
-        if _pvalue(null, obs[k]) <= alpha:
+        obs = np.array(list(cols.map(lambda v, sources=sources: _individual(cols, sources, cond, v), sources)))
+        nulls = _per_source_nulls(cols, sources, cond, n_perm, perm)
+        shift = _centers(nulls.T, debiased)
+        k = int(np.argmin(obs - shift))
+        null = (nulls - shift).min(axis=1)
+        if _pvalue(null, obs[k] - shift[k]) <= alpha:
             break
         sources.pop(k)
     return sources
 
 
-def _sequential(cols, sources, cond, n_perm, alpha, perm):
+def _sequential(cols, sources, cond, n_perm, alpha, perm, debiased=False):
     obs = np.array(list(cols.map(lambda v: _individual(cols, sources, cond, v), sources)))
+    nulls = _per_source_nulls(cols, sources, cond, n_perm, perm)
+    shift = _centers(nulls.T, debiased)
+    obs = obs - shift
     order = np.argsort(-obs)
-    idx = [perm() for _ in range(n_perm)]
-    per_source = np.stack([_individual(cols, sources, cond, v, idx) for v in sources], axis=1)
-    null = np.sort(per_source, axis=1)[:, ::-1]
+    null = np.sort(nulls - shift, axis=1)[:, ::-1]
     pvalues = {}
     failed = False
     for rank, k in enumerate(order):
@@ -577,6 +714,10 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     max_lag = max(v[1] for v in everything) if everything else 0
     if settings.estimator == "ksg":
         cols = _KsgColumns(data, target, everything, max_lag, k=settings.ksg_k, threads=settings.ksg_threads, prng=rng)
+    elif settings.estimator == "adaptive":
+        cols = _AdaptiveColumns(
+            data, target, everything, max_lag, settings.adaptive_target_bins, settings.adaptive_candidate_bins
+        )
     else:
         cols = _Columns(data, target, everything, max_lag)
     if settings.device is not None:
@@ -593,12 +734,29 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         def perm(z=None):
             return ksg.local_permutation(z, rng) if z is not None else free()
 
-    past = _greedy(cols, target_cands, conditionals, settings.n_perm_max_stat, settings.alpha_max_stat, perm)
+    elif not isinstance(cols, _KsgColumns) and settings.null == "strata":
+        from .stats import _within_strata
+
+        free_perm = perm
+
+        def perm(z=None):
+            return _within_strata(np.arange(cols.n), z, rng) if z is not None else free_perm()
+
+        setattr(perm, "uses_condition", True)  # noqa: B010
+
+    deb = settings.statistic == "debiased"
+    past = _greedy(cols, target_cands, conditionals, settings.n_perm_max_stat, settings.alpha_max_stat, perm, deb)
     selected = []
     remaining = list(source_cands)
     for _ in range(4):
         new = _greedy(
-            cols, remaining, conditionals + past + selected, settings.n_perm_max_stat, settings.alpha_max_stat, perm
+            cols,
+            remaining,
+            conditionals + past + selected,
+            settings.n_perm_max_stat,
+            settings.alpha_max_stat,
+            perm,
+            deb,
         )
         selected += new
         remaining = [v for v in remaining if v not in selected]
@@ -611,6 +769,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
             settings.n_perm_max_stat,
             settings.alpha_max_stat,
             perm,
+            deb,
         )
         past += more
         if more:
@@ -630,17 +789,19 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     base = conditionals + past
 
     if selected:
-        selected = _prune(cols, selected, base, settings.n_perm_min_stat, settings.alpha_min_stat, perm)
+        selected = _prune(cols, selected, base, settings.n_perm_min_stat, settings.alpha_min_stat, perm, deb)
     result.target_past = past
     result.sources = selected
     if selected:
         s, Ks = cols.joint(selected)
-        z, Kz = cols.joint(base)
+        z, Kz = cols.context(base)
         result.omnibus_te = cols.cmi(s, Ks, z, Kz)
         idx = [perm(z) for _ in range(settings.n_perm_omnibus)]
         null = cols.cmi_batch(s, Ks, z, Kz, idx)
         result.omnibus_pvalue = _pvalue(null, result.omnibus_te)
-        result.source_pvalues = _sequential(cols, selected, base, settings.n_perm_max_seq, settings.alpha_max_seq, perm)
+        result.source_pvalues = _sequential(
+            cols, selected, base, settings.n_perm_max_seq, settings.alpha_max_seq, perm, deb
+        )
         result.sources = [v for v in selected if result.source_pvalues[v] <= settings.alpha_max_seq]
         result.significant = result.omnibus_pvalue <= settings.alpha_omnibus and bool(result.sources)
 
@@ -650,7 +811,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
             if p in parents:
                 continue
             cands = [v for v in source_cands if v[0] == p]
-            best, value, pv = _max_statistic(cols, cands, [], settings.n_perm_tdmi, perm)
+            best, value, pv = _max_statistic(cols, cands, [], settings.n_perm_tdmi, perm, deb)
             result.tdmi_candidates[p] = {"variable": best, "tdmi": value, "pvalue": pv}
     return result
 

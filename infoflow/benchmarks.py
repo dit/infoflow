@@ -36,7 +36,7 @@ __all__ = (
     "simulate_network",
 )
 
-ESTIMATORS = ("plugin", "miller_madow", "ksg")
+ESTIMATORS = ("plugin", "miller_madow", "adaptive", "ksg")
 
 
 def _h2(p):
@@ -96,7 +96,28 @@ def _bin(values, bins):
     return np.stack([np.searchsorted(edges[:, j], values[:, j], side="right") for j in range(values.shape[1])], axis=1)
 
 
+def _adaptive(x, y, z, bins):
+    """
+    Plug-in CMI with the target and source in fixed equal-frequency bins of their ranks
+    and the conditioning set in the MDL partition learned with the target.
+    """
+    from .adaptive import codes, joint_histogram
+    from .selection import _equal_frequency, _ranks
+
+    yr, xr = _ranks(y), _ranks(x)
+    yc, xc = _equal_frequency(yr, bins), _equal_frequency(xr, bins)
+    if z.shape[1]:
+        zr = [_ranks(z[:, i]) for i in range(z.shape[1])]
+        cuts = joint_histogram([yr, *zr], fixed={0: bins})
+        zc = dense_codes(np.stack([codes(c, q) for c, q in zip(zr, cuts[1:], strict=True)], axis=1))[0]
+    else:
+        zc = np.zeros(len(y), dtype=np.int64)
+    return cmi_from_joint(joint_table(dense_codes(yc)[0], dense_codes(xc)[0], dense_codes(zc)[0]), "plugin")
+
+
 def _estimate(x, y, z, estimator, kind, bins, k, rng):
+    if estimator == "adaptive":
+        return _adaptive(x, y, z, bins)
     if estimator == "ksg":
         from dit.inference import total_correlation_ksg
 
@@ -129,10 +150,12 @@ def conditioning_scaling(
     ----------
     kind : {'discrete', 'gaussian'}
         See :func:`scaling_data`.
-    estimators : sequence of {'plugin', 'miller_madow', 'ksg'}
+    estimators : sequence of {'plugin', 'miller_madow', 'adaptive', 'ksg'}
         Plug-in and Miller--Madow estimates use the symbols (Gaussian data are cut
-        into `bins` equal-frequency bins per variable); KSG uses the raw values
-        with `k` neighbours.
+        into `bins` equal-frequency bins per variable); ``'adaptive'`` bins the target
+        and source the same way and partitions the conditioning set by MDL together
+        with the target (:mod:`infoflow.adaptive`); KSG uses the raw values with `k`
+        neighbours.
     n_samples, dims : sequences of int
     n_reps : int
         Independent datasets per (sample size, dimension).
