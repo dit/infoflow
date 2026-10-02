@@ -74,13 +74,13 @@ Selection on :math:`x_3`       :math:`4 \to 3`    False parents
 =============================  =================  ===============================
 plug-in (default)              0 of 3 seeds       none
 plug-in, strata, debiased      0 of 3 seeds       :math:`x_1` (1 seed)
-adaptive, strata, debiased     2 of 2 seeds       :math:`x_1` at lags 3–5
+adaptive, strata, debiased     3 of 3 seeds       :math:`x_1` at lags 1–5
 KSG (local null)               3 of 3 seeds       none
 =============================  =================  ===============================
 
 Adaptive conditioning finds the weak edge without nearest-neighbour estimates, but
 also selects lags of :math:`x_1` (which carries :math:`x_0^2`) that the partitioned
-context does not fully absorb, and it is slow (15–25 minutes per target). Estimating
+context does not fully absorb, and it is slow (15–50 minutes per target). Estimating
 the layers on the adaptive partition (``infer_multiplex(layer_symbols="adaptive")``)
 did not confirm :math:`4 \to 3` either: the layer estimates merge contexts before
 optimizing, which removes most of the resolution the partition provides. For weak
