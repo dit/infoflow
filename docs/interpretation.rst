@@ -37,8 +37,8 @@ Optional layers:
 * a lag-0 layer with collider orientation in the style of PCMCI+
   :cite:`Runge2020` (:mod:`infoflow.contemporaneous`), with an adapter to Tigramite
   :cite:`Runge2018`;
-* two-source partial-information-decomposition hyperedges
-  :cite:`Williams2010,Bertschinger2014` (:mod:`infoflow.hyperedges`).
+* detected and classified partial-information-decomposition hyperedges over sets of
+  parents, with any of dit's PID measures (:doc:`hyperedges`).
 
 A five-process benchmark from the MuTE toolbox :cite:`Montalto2014` is available
 as :func:`infoflow.datasets.mute_network`.

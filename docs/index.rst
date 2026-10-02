@@ -31,6 +31,7 @@ and false-discovery-rate control.
    preprocessing
    skeleton
    interpretation
+   hyperedges
    workflow
    gpu
    benchmarks

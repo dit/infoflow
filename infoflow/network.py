@@ -45,8 +45,9 @@ class MultiplexNetwork:
         Every setting used, for provenance.
     report : object, None
         The preprocessing report, when raw data were preprocessed.
-    hyperedges : list of dict
-        Two-source PID hyperedges, when requested.
+    hyperedges : xarray.Dataset, None
+        Detected and classified PID hyperedges (:func:`~infoflow.hyperedges.multivariate_hyperedges`),
+        when requested.
     """
 
     dataset: xr.Dataset
@@ -54,7 +55,7 @@ class MultiplexNetwork:
     edges: dict = field(default_factory=dict)
     settings: dict = field(default_factory=dict)
     report: object = None
-    hyperedges: list = field(default_factory=list)
+    hyperedges: xr.Dataset | None = None
 
     @property
     def names(self):
@@ -211,6 +212,8 @@ def infer_multiplex(
     interpret=True,
     contemporaneous=False,
     hyperedges=False,
+    hyperedge_measure="ccs",
+    max_sources=3,
     checkpoint=None,
     device=None,
     prng=None,
@@ -259,7 +262,12 @@ def infer_multiplex(
         Add the optional lag-0 layer (:mod:`infoflow.contemporaneous`) as the
         ``contemporaneous`` variable (0 none, 1 undirected, 2 oriented source -> target).
     hyperedges : bool
-        Add two-source PID hyperedges (:mod:`infoflow.hyperedges`) as ``network.hyperedges``.
+        Detect and classify PID hyperedges of each target's sets of parents
+        (:func:`~infoflow.hyperedges.multivariate_hyperedges`) as ``network.hyperedges``.
+    hyperedge_measure : str, dit PID class, or list
+        PID measure(s) for the hyperedges (see :data:`~infoflow.hyperedges.PID_MEASURES`).
+    max_sources : int
+        Largest source set decomposed.
     device : {None, 'auto', 'cpu', 'mps', 'cuda'}
         Evaluate the permutation nulls of parent selection in batches with the PyTorch
         kernels of :mod:`infoflow.backend` (``'auto'`` prefers CUDA, then Apple MPS,
@@ -366,11 +374,13 @@ def infer_multiplex(
         graph, values, _ = contemporaneous_layer(estimation_data, skeleton, alpha=alpha, prng=rng)
         dataset["contemporaneous"] = (("source", "target"), graph)
         dataset["contemporaneous_cmi"] = (("source", "target"), values)
-    pid = []
+    pid = None
     if hyperedges:
-        from .hyperedges import pid_hyperedges
+        from .hyperedges import multivariate_hyperedges
 
-        pid = pid_hyperedges(estimation_data, skeleton)
+        pid = multivariate_hyperedges(
+            estimation_data, skeleton, measure=hyperedge_measure, max_sources=max_sources, alpha=alpha, prng=rng
+        )
     import datetime
     from importlib.metadata import version
 
@@ -388,6 +398,8 @@ def infer_multiplex(
         "interpret": interpret,
         "contemporaneous": contemporaneous,
         "hyperedges": hyperedges,
+        "hyperedge_measure": str(hyperedge_measure),
+        "max_sources": max_sources,
         "max_lag": max_lag,
         "embeddings": embeddings if isinstance(embeddings, list) else [embeddings] * discrete.n_processes,
         "skeleton_settings": settings,

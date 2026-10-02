@@ -74,4 +74,6 @@ def test_infer_multiplex_optional_layers():
         prng=0,
     )
     assert "contemporaneous" in net.dataset
-    assert net.hyperedges and net.hyperedges[0]["synergy"] > 0.9
+    h = net.hyperedges
+    assert h.sizes["hyperedge"] == 1 and float(h["synergy"].squeeze()) > 0.9
+    assert str(h["consensus"].item()) == "synergistic" and bool(h["significant"].item())
