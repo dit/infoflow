@@ -58,3 +58,36 @@ within-strata permutation also breaks the candidate's own autocorrelation, so it
 somewhat anti-conservative for strongly autocorrelated processes such as these VAR
 series, while weakly autocorrelated ones (the logistic maps) keep their precision.
 The options are therefore not the default.
+
+Large networks
+--------------
+
+At the scale of :cite:`Novelli2019` (100 nodes, up to 10 000 samples; one network
+per configuration, significance 0.01, source pre-screening at 0.1;
+``validation/run_large.sh``):
+
+===================================  =====  =========  ======  ===========  =======
+Configuration                        T      Precision  Recall  Specificity  Runtime
+===================================  =====  =========  ======  ===========  =======
+VAR, plug-in                         1000   0.62       0.10    0.998        4 min
+VAR, plug-in                         3000   0.88       0.20    0.999        7 min
+VAR, plug-in                         10000  0.95       0.30    0.9995       16 min
+VAR, plug-in, strata + debiased      10000  0.89       0.50    0.998        39 min
+logistic maps, plug-in               1000   0.87       0.20    0.999        4 min
+logistic maps, plug-in               3000   0.99       0.43    0.9999       11 min
+logistic maps, plug-in               10000  0.95       0.59    0.999        31 min
+logistic maps, KSG (20 targets)      10000  0.98       1.00    0.9995       202 min
+===================================  =====  =========  ======  ===========  =======
+
+The intrinsic layer is more precise still (0.92–1.00) at somewhat lower recall. On
+an empty 100-node network with 10 000 samples the false-positive rate was 0.4% for
+selected parents and 0.06% in the intrinsic layer.
+
+With the KSG estimator on coupled logistic maps, every one of the 41 true links into
+the 20 sampled targets was recovered with one false link, matching the
+precision, recall, and specificity above 98% that :cite:`Novelli2019` report at this
+size and length; it costs about ten minutes per target. On the linear VAR networks
+the plug-in path stays conservative (recall 0.30, rising to 0.50 with the strata null
+at a small cost in precision), and KSG is not the remedy there: each parent explains
+only about 2% of its target's variance, which needs the efficiency of a parametric
+(linear-Gaussian) estimator, the one :cite:`Novelli2019` used for these networks.
