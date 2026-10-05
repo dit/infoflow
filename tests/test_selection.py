@@ -197,3 +197,30 @@ def test_ksg_local_permutation_and_prescreen():
     assert sk.parents() == [0] and 0 in sk.prescreened
     full = select_parents(result.data, 2, result.embeddings, None, dataclasses.replace(settings, curtail=False), 0)
     assert full.sources == sk.sources
+
+
+def test_gaussian_estimator():
+    from infoflow.benchmarks import random_network, scaling_data, simulate_network
+    from infoflow.preprocess import preprocess
+    from infoflow.selection import _GaussianColumns
+
+    g = _GaussianColumns.__new__(_GaussianColumns)
+    x, y, z, truth = scaling_data(20000, 3, "gaussian", prng=0)
+    g.y, g.n, g._bases = (y - y.mean()) / y.std(), len(y), {}
+    assert g.cmi(x, 1, z, 3) == pytest.approx(truth, abs=0.02)
+    idx = [np.random.default_rng(s).permutation(g.n) for s in range(3)]
+    assert np.allclose(g.cmi_batch(x, 1, z, 3, idx), [g.cmi(x[i], 1, z, 3) for i in idx])
+    xi, yi, zi, _ = scaling_data(20000, 3, "gaussian", coupled=False, prng=1)
+    g.y, g._bases = (yi - yi.mean()) / yi.std(), {}
+    assert g.cmi(xi, 1, zi, 3) < 0.002
+
+    graph = random_network(6, prng=3)
+    result = preprocess(simulate_network(graph, 4000, "var", prng=3), max_lag=5, prng=0)
+    settings = dataclasses.replace(SkeletonSettings(**FAST), estimator="gaussian", synergy_search=False)
+    for t in range(6):
+        sk = select_parents(result.data, t, result.embeddings, None, settings, 0)
+        true = {s for s, _ in graph.in_edges(t)}
+        assert set(sk.parents()) <= true  # no false parents
+        assert len(set(sk.parents()) & true) >= len(true) - 1  # at most one weak link missed
+    with pytest.raises(ValueError, match="raw series"):
+        select_parents(DiscreteData.from_discrete([np.zeros((100, 2), dtype=int)]), 1, None, None, settings, 0)

@@ -69,7 +69,13 @@ class SkeletonSettings:
     on what is conditioned on, so a redundant proxy for the target's own past (such
     as a child of the target) is not mistaken for a parent.
 
-    ``curtail`` (default: on for KSG) evaluates permutations ``curtail_batch`` at a time
+    ``estimator='gaussian'`` selects parents with the linear-Gaussian conditional mutual
+    information on the raw values (log-ratio of regression residual variances, equal to
+    Granger causality for Gaussian processes :cite:`Barnett2009`), as IDTxl does for
+    vector-autoregressive data :cite:`Novelli2019`: far more powerful than symbols or
+    KSG when couplings are linear and weak, blind to nonlinear ones.
+
+    ``curtail`` (default: on for KSG and Gaussian) evaluates permutations ``curtail_batch`` at a time
     and stops a test as soon as its p-value must exceed the stage's level, which leaves
     every decision unchanged and saves most permutations in the many tests that fail.
     ``prescreen_alpha`` first tests each source process on its own (its best lag's
@@ -129,8 +135,8 @@ class SkeletonSettings:
             check_n_perm(self.n_perm_tdmi, self.alpha_tdmi)
         if self.ksg_null not in ("permutation", "local"):
             raise ValueError("ksg_null must be 'permutation' or 'local'")
-        if self.estimator not in ("plugin", "ksg", "adaptive"):
-            raise ValueError("estimator must be 'plugin', 'ksg', or 'adaptive'")
+        if self.estimator not in ("plugin", "ksg", "adaptive", "gaussian"):
+            raise ValueError("estimator must be 'plugin', 'ksg', 'adaptive', or 'gaussian'")
         if self.null not in ("free", "strata"):
             raise ValueError("null must be 'free' or 'strata'")
         if self.statistic not in ("raw", "debiased"):
@@ -272,6 +278,87 @@ def _ranks(v):
 
 def _equal_frequency(ranks, bins):
     return np.minimum((ranks * bins).astype(np.int64), bins - 1)
+
+
+class _GaussianColumns:
+    """
+    The raw values of one target's realizations, for linear-Gaussian estimates.
+
+    :math:`I[Y : X \\mid Z] = \\tfrac12 \\log_2 \\sigma^2(Y \\mid Z) / \\sigma^2(Y \\mid X, Z)`, the
+    log-ratio of least-squares residual variances (with an intercept); for Gaussian
+    processes transfer entropy equals Granger causality :cite:`Barnett2009`, and this
+    is the estimator :cite:`Novelli2019` used for vector-autoregressive networks. Each
+    conditioning set's orthonormal basis is cached, and a batch of permuted candidates
+    is residualized with one matrix product.
+    """
+
+    def __init__(self, data, target, variables, max_lag):
+        self.r = realizations(data, target, variables, max_lag=max_lag)
+        self.variables = list(self.r.variables)
+        self.index = {v: i for i, v in enumerate(self.variables)}
+        self.alphabet = dict.fromkeys(self.variables, 1)
+        y, values = _raw_columns(data, self.r, target)
+        self.y = (y - y.mean()) / (y.std() or 1.0)
+        scale = values.std(axis=0)
+        self._values = (values - values.mean(axis=0)) / np.where(scale > 0, scale, 1.0)
+        self.Ky = 1
+        self.n = len(self.y)
+        self.map = map
+        self.device = None
+        self._bases = {}
+
+    def column(self, v):
+        return self._values[:, self.index[v]], 1
+
+    def joint(self, variables):
+        cols = [self.index[v] for v in variables]
+        return self._values[:, cols], len(cols)
+
+    def context(self, variables):
+        return self.joint(variables)
+
+    def _basis(self, z):
+        z = np.asarray(z, dtype=float).reshape(self.n, -1)
+        key = (z.shape, hash(z.tobytes()))
+        if key not in self._bases:
+            q, _ = np.linalg.qr(np.column_stack([np.ones(self.n), z]))
+            ey = self.y - q @ (q.T @ self.y)
+            self._bases[key] = (q, ey, float(ey @ ey))
+            if len(self._bases) > 64:
+                self._bases.pop(next(iter(self._bases)))
+        return self._bases[key]
+
+    def _values_for(self, X, q, ey, vy):
+        """
+        CMI (bits) for candidate blocks ``X`` of shape (B, n, dx).
+        """
+        E = X - np.einsum("nk,bk...->bn...", q, np.einsum("nk,bn...->bk...", q, X))
+        if E.shape[2] == 1:
+            e = E[:, :, 0]
+            num = e @ ey
+            den = np.einsum("bn,bn->b", e, e)
+            explained = np.where(den > 0, num**2 / np.where(den > 0, den, 1), 0.0)
+        else:
+            G = np.einsum("bni,bnj->bij", E, E)
+            g = np.einsum("bni,n->bi", E, ey)
+            ridge = 1e-12 * np.eye(G.shape[1])
+            sol = np.linalg.solve(G + ridge, g[..., None])[..., 0]
+            explained = np.einsum("bi,bi->b", g, sol)
+        residual = np.maximum(vy - explained, 1e-300)
+        return 0.5 * np.log2(vy / residual)
+
+    def cmi(self, c, Kc, z, Kz):
+        """
+        Linear-Gaussian :math:`I[Y : c \\mid z]` in bits.
+        """
+        q, ey, vy = self._basis(z)
+        X = np.asarray(c, dtype=float).reshape(1, self.n, -1)
+        return float(self._values_for(X, q, ey, vy)[0])
+
+    def cmi_batch(self, c, Kc, z, Kz, idx):
+        q, ey, vy = self._basis(z)
+        c = np.asarray(c, dtype=float).reshape(self.n, -1)
+        return self._values_for(c[np.asarray(idx)], q, ey, vy)
 
 
 class _AdaptiveColumns(_Columns):
@@ -802,7 +889,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     # max_source_lag (IDTxl's max_lag_sources; default the larger of 5 and the largest
     # lag budget in the network), on each source's own grid.
     source_max = settings.max_source_lag or max(5, _max_budget(embeddings, P))
-    if settings.estimator == "ksg":
+    if settings.estimator in ("ksg", "gaussian"):
         # KSG resolves the target's own past finely enough that memory beyond the symbolic
         # lag budget matters; offer the target the source lag range (IDTxl's max_lag_target).
         target_cands = [(target, lag) for lag in _source_lags(data, embeddings, target, source_max)]
@@ -816,6 +903,8 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     max_lag = max(v[1] for v in everything) if everything else 0
     if settings.estimator == "ksg":
         cols = _KsgColumns(data, target, everything, max_lag, k=settings.ksg_k, threads=settings.ksg_threads, prng=rng)
+    elif settings.estimator == "gaussian":
+        cols = _GaussianColumns(data, target, everything, max_lag)
     elif settings.estimator == "adaptive":
         cols = _AdaptiveColumns(
             data, target, everything, max_lag, settings.adaptive_target_bins, settings.adaptive_candidate_bins
@@ -847,7 +936,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         setattr(perm, "uses_condition", True)  # noqa: B010
 
     deb = settings.statistic == "debiased"
-    curtail = settings.curtail if settings.curtail is not None else settings.estimator == "ksg"
+    curtail = settings.curtail if settings.curtail is not None else settings.estimator in ("ksg", "gaussian")
     bt = settings.curtail_batch if curtail else None
     past = _greedy(cols, target_cands, conditionals, settings.n_perm_max_stat, settings.alpha_max_stat, perm, deb, bt)
     all_source_cands = list(source_cands)
