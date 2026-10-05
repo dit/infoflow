@@ -111,3 +111,11 @@ def test_layers_respect_te_bound_and_flag_unconfirmed_parents(make):
     assert not ((intrinsic | synergistic) & ~parent).any()
     unconfirmed = np.char.find(ds["flags"].values.astype(str), "layers-unconfirmed") >= 0
     assert np.array_equal(unconfirmed, parent & ~intrinsic & ~synergistic)
+
+
+def test_resample_cap_warns():
+    data = datasets.chain(1500, seed=4)
+    fast = SkeletonSettings(n_perm_max_stat=50, n_perm_min_stat=50, n_perm_omnibus=50, n_perm_max_seq=50)
+    with pytest.warns(UserWarning, match="capped at 30"):
+        net = infer_multiplex(data, max_lag=2, skeleton_settings=fast, max_resamples=30, interpret=False, prng=0)
+    assert net.settings["max_resamples"] == 30

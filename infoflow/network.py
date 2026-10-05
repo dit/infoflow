@@ -221,6 +221,7 @@ def infer_multiplex(
     targets=None,
     map_fn=map,
     adaptive_resamples=True,
+    max_resamples=2000,
     holdout=None,
     node_layer=True,
     interpret=True,
@@ -269,6 +270,11 @@ def infer_multiplex(
     adaptive_resamples : bool
         Raise `n_boot` and `n_null` to at least ``ceil(m / alpha)`` for ``m`` tested
         edges, so that the smallest attainable p-value can survive the FDR correction.
+    max_resamples : int, None
+        Cap on that increase (None: uncapped). Large networks with many tested edges
+        can otherwise need tens of thousands of resamples per edge; when the cap binds,
+        a warning says so, since edges whose p-values reach the floor may then not be
+        declared significant.
     node_layer : bool
         Add active information storage and predictability flags per node.
     interpret : bool
@@ -357,6 +363,16 @@ def infer_multiplex(
         # With m tested edges, BH can only reject a p-value at its floor 1 / (B + 1) if
         # B + 1 >= m / alpha, so raise the resample budget to make that possible.
         floor = int(np.ceil(len(jobs) / alpha))
+        if max_resamples is not None and floor > max_resamples:
+            import warnings
+
+            warnings.warn(
+                f"{len(jobs)} edges at alpha={alpha} would need {floor} resamples per edge for the FDR "
+                f"correction to reject at the smallest attainable p-value; capped at {max_resamples}, "
+                f"so edges whose layer p-values reach that floor may not be declared significant.",
+                stacklevel=2,
+            )
+            floor = max_resamples
         n_boot, n_null = max(n_boot, floor), max(n_null, floor)
 
     def run(job):
@@ -420,6 +436,7 @@ def infer_multiplex(
         "n_boot": n_boot,
         "n_null": n_null,
         "adaptive_resamples": adaptive_resamples,
+        "max_resamples": max_resamples,
         "holdout": holdout,
         "node_layer": node_layer,
         "interpret": interpret,

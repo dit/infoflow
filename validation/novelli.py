@@ -29,6 +29,9 @@ def main():
     parser.add_argument("--threads", type=int, default=8, help="targets inferred in parallel")
     parser.add_argument("--prescreen", type=float, default=None, help="pre-screen level for source processes")
     parser.add_argument("--n-targets", type=int, default=None, help="infer and score this many sampled targets")
+    parser.add_argument(
+        "--no-shared", action="store_true", help="skip layer estimates for shared-only candidates (not scored)"
+    )
     parser.add_argument("--device", default=None, help="batched kernels: cpu, mps, cuda, or auto (default: NumPy path)")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", default=None, help="write the results to this netCDF file")
@@ -50,7 +53,12 @@ def main():
         n_reps=args.reps,
         mean_in_degree=args.in_degree,
         n_targets=args.n_targets,
-        infer_kwargs={"skeleton_settings": settings, "map_fn": thread_map(args.threads), "device": args.device},
+        infer_kwargs={
+            "include_shared_candidates": not args.no_shared,
+            "skeleton_settings": settings,
+            "map_fn": thread_map(args.threads),
+            "device": args.device,
+        },
         prng=args.seed,
     )
     ds.attrs.update(
