@@ -262,22 +262,25 @@ def simulate_network(
     return x[-n_samples:]
 
 
-def _edges(net, level):
+def _edges(net, level, targets=None):
     if level == "skeleton":
         found = {(p, t) for t, sk in net.skeleton.items() if sk.significant for p in sk.parents()}
     else:
         sig = net.dataset["significant"].sel(layer=level).values
         found = {(int(s), int(t)) for s, t in zip(*np.nonzero(sig), strict=True)}
+    if targets is not None:
+        found = {e for e in found if e[1] in targets}
     return found
 
 
-def score_network(net, graph, levels=("skeleton", "intrinsic")):
+def score_network(net, graph, levels=("skeleton", "intrinsic"), targets=None):
     """
     Precision, recall, specificity, and normalized lag error of an inferred network.
 
     The lag error is the mean absolute difference between true and inferred lags over
     recalled links, divided by its value for two independent uniform lags on the
-    graph's lag range (:cite:`Novelli2019`), so 0 is perfect and 1 is chance.
+    graph's lag range (:cite:`Novelli2019`), so 0 is perfect and 1 is chance. With
+    `targets`, only links into those targets are scored.
 
     Returns
     -------
@@ -285,16 +288,17 @@ def score_network(net, graph, levels=("skeleton", "intrinsic")):
         ``level -> {"precision", "recall", "specificity", "lag_error", "n_found"}``.
     """
     n = graph.number_of_nodes()
-    truth = {(s, t) for s, t in graph.edges()}
+    targets = set(range(n)) if targets is None else set(targets)
+    truth = {(s, t) for s, t in graph.edges() if t in targets}
     lags = [d["lag"] for _, _, d in graph.edges(data=True)]
     L = max(lags) if lags else 1
     chance = (L**2 - 1) / (3 * L) if L > 1 else 1.0
     out = {}
     for level in levels:
-        found = _edges(net, level)
+        found = _edges(net, level, targets)
         tp, fp = len(found & truth), len(found - truth)
         fn = len(truth - found)
-        tn = n * (n - 1) - tp - fp - fn
+        tn = len(targets) * (n - 1) - tp - fp - fn
         recalled = sorted(found & truth)
         delay = net.dataset["delay"].values
         err = [abs(int(delay[s, t]) - graph.edges[s, t]["lag"]) for s, t in recalled]
@@ -320,6 +324,7 @@ def network_validation(
     max_lag=5,
     levels=("skeleton", "intrinsic"),
     infer_kwargs=None,
+    n_targets=None,
     prng=None,
 ):
     """
@@ -339,6 +344,9 @@ def network_validation(
         ``'skeleton'`` (selected parents) and/or edge layers such as ``'intrinsic'``.
     infer_kwargs : dict, None
         Passed to :func:`~infoflow.network.infer_multiplex`.
+    n_targets : int, None
+        Infer and score only this many randomly chosen targets per network (links into
+        them), which keeps slow estimators tractable on large networks.
     prng : None, int, Generator
 
     Returns
@@ -357,10 +365,13 @@ def network_validation(
             for r in range(n_reps):
                 graph = random_network(N, mean_in_degree, max_lag, rng)
                 data = simulate_network(graph, T, kind, prng=rng)
+                targets = None
+                if n_targets is not None and n_targets < N:
+                    targets = sorted(int(t) for t in rng.choice(N, n_targets, replace=False))
                 t0 = time.perf_counter()
-                net = infer_multiplex(data, prng=int(rng.integers(2**32)), **kwargs)
+                net = infer_multiplex(data, targets=targets, prng=int(rng.integers(2**32)), **kwargs)
                 elapsed = time.perf_counter() - t0
-                scores = score_network(net, graph, levels)
+                scores = score_network(net, graph, levels, targets)
                 for li, level in enumerate(levels):
                     for m in METRICS[:-1]:
                         values[m][li, i, j, r] = scores[level][m]

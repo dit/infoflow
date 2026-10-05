@@ -27,6 +27,8 @@ def main():
     parser.add_argument("--null", choices=("free", "strata"), default="free", help="selection null (plug-in/adaptive)")
     parser.add_argument("--statistic", choices=("raw", "debiased"), default="raw", help="selection statistic")
     parser.add_argument("--threads", type=int, default=8, help="targets inferred in parallel")
+    parser.add_argument("--prescreen", type=float, default=None, help="pre-screen level for source processes")
+    parser.add_argument("--n-targets", type=int, default=None, help="infer and score this many sampled targets")
     parser.add_argument("--device", default=None, help="batched kernels: cpu, mps, cuda, or auto (default: NumPy path)")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", default=None, help="write the results to this netCDF file")
@@ -37,6 +39,7 @@ def main():
         estimator=args.estimator,
         null=args.null,
         statistic=args.statistic,
+        prescreen_alpha=args.prescreen,
         **{f"alpha_{s}": args.alpha for s in ("max_stat", "min_stat", "omnibus", "max_seq")},
         **{f"n_perm_{s}": n_perm for s in ("max_stat", "min_stat", "omnibus", "max_seq")},
     )
@@ -46,6 +49,7 @@ def main():
         n_samples=args.samples,
         n_reps=args.reps,
         mean_in_degree=args.in_degree,
+        n_targets=args.n_targets,
         infer_kwargs={"skeleton_settings": settings, "map_fn": thread_map(args.threads), "device": args.device},
         prng=args.seed,
     )
@@ -54,6 +58,8 @@ def main():
         estimator=args.estimator,
         null=args.null,
         statistic=args.statistic,
+        prescreen=str(args.prescreen),
+        n_targets=str(args.n_targets),
         n_perm=n_perm,
         device=str(args.device),
     )

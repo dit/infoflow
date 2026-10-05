@@ -153,7 +153,7 @@ def _ksg_cmi_batch(x_batch, y, z, k, device, chunk=None, max_elements=200_000_00
     Returns
     -------
     np.ndarray
-        Shape (B,), clipped at zero.
+        Shape (B,), not clipped at zero (only the ordering matters in a permutation test).
     """
     torch = _torch()
     from scipy.special import digamma
@@ -190,7 +190,7 @@ def _ksg_cmi_batch(x_batch, y, z, k, device, chunk=None, max_elements=200_000_00
         value = digamma(k) - np.mean(digamma(n_xz) + digamma(n_yz) - digamma(n_z), axis=1)
     else:
         value = digamma(k) + digamma(n) - np.mean(digamma(n_xz) + digamma(n_yz), axis=1)
-    return np.maximum(value / np.log(2), 0.0)
+    return value / np.log(2)
 
 
 def plugin_cmi_batch(y, Ky, x_batch, Kx, z, Kz, device, max_cells=50_000_000):

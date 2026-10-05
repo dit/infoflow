@@ -67,7 +67,16 @@ class SkeletonSettings:
     pair, and omnibus nulls use Runge's local permutation in the conditioning set
     :cite:`Runge2018` instead of a free permutation: a candidate keeps its dependence
     on what is conditioned on, so a redundant proxy for the target's own past (such
-    as a child of the target) is not mistaken for a parent. Conditioning on a parent
+    as a child of the target) is not mistaken for a parent.
+
+    ``curtail`` (default: on for KSG) evaluates permutations ``curtail_batch`` at a time
+    and stops a test as soon as its p-value must exceed the stage's level, which leaves
+    every decision unchanged and saves most permutations in the many tests that fail.
+    ``prescreen_alpha`` first tests each source process on its own (its best lag's
+    transfer entropy given the selected target past, ``n_perm_prescreen`` permutations)
+    and keeps only those passing for the multivariate search; this makes large networks
+    tractable, at the risk of missing a source that is informative only jointly with
+    another. Conditioning on a parent
     continuously removes its influence exactly, where bins leave a residue inside
     each bin that can hide weak edges; the layers are still estimated on symbols.
     It is much slower.
@@ -105,6 +114,10 @@ class SkeletonSettings:
     ksg_k: int = 4
     ksg_threads: int | None = None
     ksg_null: str = "local"
+    curtail: bool | None = None
+    curtail_batch: int = 20
+    prescreen_alpha: float | None = None
+    n_perm_prescreen: int = 100
     device: str | None = None
 
     def check(self):
@@ -140,6 +153,7 @@ class TargetSkeleton:
     omnibus_te: float = 0.0
     omnibus_pvalue: float = 1.0
     significant: bool = False
+    prescreened: list | None = None
     pairs: list = field(default_factory=list)
     tdmi_candidates: dict = field(default_factory=dict)
     n_samples: int = 0
@@ -399,16 +413,30 @@ class _KsgColumns:
         if key not in self._contexts:
             self._contexts[key] = KDTree(z).query(z, k_perm, p=np.inf, workers=-1)[1].reshape(self.n, -1)
         neighbors = self._contexts[key]
-        used = np.zeros(self.n, dtype=bool)
-        choice = np.empty(self.n, dtype=np.int64)
-        order = rng.permutation(self.n)
-        shuffles = rng.random(neighbors.shape)
-        for i in order:
-            candidates = neighbors[i][np.argsort(shuffles[i])]
-            free = candidates[~used[candidates]]
-            j = free[0] if len(free) else candidates[0]
-            used[j] = True
-            choice[i] = j
+        n, k = neighbors.shape
+        # Each sample proposes its neighbours in a random order; a neighbour proposed by
+        # several samples goes to the one with the highest random priority, and samples
+        # left without a free neighbour after k rounds reuse their first proposal.
+        order = np.argsort(rng.random((n, k)), axis=1)
+        shuffled = np.take_along_axis(neighbors, order, axis=1)
+        priority = rng.random(n)
+        choice = np.full(n, -1, dtype=np.int64)
+        used = np.zeros(n, dtype=bool)
+        for r in range(k):
+            pending = np.flatnonzero(choice < 0)
+            if not len(pending):
+                break
+            proposal = shuffled[pending, r]
+            free = ~used[proposal]
+            pending, proposal = pending[free], proposal[free]
+            ranked = np.lexsort((-priority[pending], proposal))
+            first = np.ones(len(ranked), dtype=bool)
+            first[1:] = proposal[ranked][1:] != proposal[ranked][:-1]
+            winners = ranked[first]
+            choice[pending[winners]] = proposal[winners]
+            used[proposal[winners]] = True
+        left = choice < 0
+        choice[left] = shuffled[left, 0]
         return choice
 
     def joint(self, variables):
@@ -452,7 +480,9 @@ class _KsgColumns:
             value = digamma(k) + digamma(self.n) - np.mean(digamma(n_xz) + digamma(n_yz))
         else:
             value = digamma(k) - np.mean(digamma(n_xz) + digamma(n_yz) - digamma(count(z_tree, z)))
-        return max(float(value) / np.log(2), 0.0)
+        # Not clipped at zero: KSG is biased downward in high dimensions, and clipping
+        # would tie weak true effects with the many null values clipped to zero.
+        return float(value) / np.log(2)
 
 
 def _base_permuter(columns, settings, rng):
@@ -547,7 +577,31 @@ def _centers(nulls, debiased):
     return nulls.mean(axis=1) if debiased else np.zeros(len(nulls))
 
 
-def _max_statistic(cols, candidates, cond, n_perm, perm, debiased=False):
+def _null_statistics(n_perm, draw, evaluate, observed, alpha=None, batch=None):
+    """
+    Null values of a statistic, with optional curtailment.
+
+    `evaluate` maps a list of permutation index arrays to one null value per
+    permutation; `draw` returns the next permutation. With `batch` (and `alpha`), the
+    permutations are evaluated `batch` at a time and stopped as soon as enough null
+    values reach `observed` that the p-value over all `n_perm` permutations must exceed
+    `alpha` whatever the rest show: the decision is the same as with every permutation
+    (a curtailed test), and the p-value reported from the evaluated ones is conservative.
+    """
+    if batch is None or alpha is None:
+        return np.asarray(evaluate([draw() for _ in range(n_perm)]))
+    limit = int(np.floor(alpha * (n_perm + 1) - 1)) + 1
+    values, exceed = [], 0
+    while len(values) < n_perm:
+        chunk = np.asarray(evaluate([draw() for _ in range(min(batch, n_perm - len(values)))]))
+        values.extend(chunk)
+        exceed += int(np.sum(chunk >= observed - 1e-12))
+        if exceed >= limit:
+            break
+    return np.asarray(values)
+
+
+def _max_statistic(cols, candidates, cond, n_perm, perm, debiased=False, alpha=None, batch=None):
     """
     The best candidate, its CMI, and the max-statistic p-value.
 
@@ -555,23 +609,32 @@ def _max_statistic(cols, candidates, cond, n_perm, perm, debiased=False):
     null, and the null maximum is taken over equally centered values: plug-in biases
     differ between candidates (they depend on how each relates to the conditioning
     set), so the raw maximum can favour the most biased candidate over the most
-    informative one.
+    informative one. With `batch`, raw tests are curtailed at `alpha`
+    (:func:`_null_statistics`).
     """
     z, Kz = cols.context(cond)
     obs = np.array(list(cols.map(lambda v: cols.cmi(cols.column(v)[0], cols.alphabet[v], z, Kz), candidates)))
-    idx = [perm(z) for _ in range(n_perm)]
-    nulls = np.array([cols.cmi_batch(cols.column(v)[0], cols.alphabet[v], z, Kz, idx) for v in candidates])
-    shift = _centers(nulls, debiased)
-    best = int(np.argmax(obs - shift))
-    null = (nulls - shift[:, None]).max(axis=0)
-    return candidates[best], float(obs[best]), _pvalue(null, obs[best] - shift[best])
+    if debiased:
+        idx = [perm(z) for _ in range(n_perm)]
+        nulls = np.array([cols.cmi_batch(cols.column(v)[0], cols.alphabet[v], z, Kz, idx) for v in candidates])
+        shift = _centers(nulls, True)
+        best = int(np.argmax(obs - shift))
+        null = (nulls - shift[:, None]).max(axis=0)
+        return candidates[best], float(obs[best]), _pvalue(null, obs[best] - shift[best])
+    best = int(np.argmax(obs))
+
+    def evaluate(idx):
+        return np.max([cols.cmi_batch(cols.column(v)[0], cols.alphabet[v], z, Kz, idx) for v in candidates], axis=0)
+
+    null = _null_statistics(n_perm, lambda: perm(z), evaluate, obs[best], alpha, batch)
+    return candidates[best], float(obs[best]), _pvalue(null, obs[best])
 
 
-def _greedy(cols, candidates, cond, n_perm, alpha, perm, debiased=False):
+def _greedy(cols, candidates, cond, n_perm, alpha, perm, debiased=False, batch=None):
     selected = []
     candidates = list(candidates)
     while candidates:
-        best, _, p = _max_statistic(cols, candidates, cond + selected, n_perm, perm, debiased)
+        best, _, p = _max_statistic(cols, candidates, cond + selected, n_perm, perm, debiased, alpha, batch)
         if p > alpha:
             break
         selected.append(best)
@@ -579,11 +642,11 @@ def _greedy(cols, candidates, cond, n_perm, alpha, perm, debiased=False):
     return selected
 
 
-def _pair_search(cols, candidates, cond, settings, perm):
-    debiased = settings.statistic == "debiased"
+def _pair_search(cols, candidates, cond, settings, perm, batch=None):
     """
     The best pair of candidates (by joint CMI) if it passes a max statistic over pairs.
     """
+    debiased = settings.statistic == "debiased"
     pool = sorted(candidates, key=lambda v: (v[1], v[0]))[: settings.max_pair_candidates]
     pairs = [(a, b) for a, b in combinations(pool, 2) if a[0] != b[0] or a[1] != b[1]]
     if not pairs:
@@ -591,12 +654,22 @@ def _pair_search(cols, candidates, cond, settings, perm):
     z, Kz = cols.context(cond)
     codes = [cols.joint([a, b]) for a, b in pairs]
     obs = np.array(list(cols.map(lambda code: cols.cmi(code[0], code[1], z, Kz), codes)))
-    idx = [perm(z) for _ in range(settings.n_perm_pairs)]
-    nulls = np.array([cols.cmi_batch(c, K, z, Kz, idx) for c, K in codes])
-    shift = _centers(nulls, debiased)
-    best = int(np.argmax(obs - shift))
-    null = (nulls - shift[:, None]).max(axis=0)
-    if _pvalue(null, obs[best] - shift[best]) <= settings.alpha_pairs:
+    if debiased:
+        idx = [perm(z) for _ in range(settings.n_perm_pairs)]
+        nulls = np.array([cols.cmi_batch(c, K, z, Kz, idx) for c, K in codes])
+        shift = _centers(nulls, True)
+        best = int(np.argmax(obs - shift))
+        null = (nulls - shift[:, None]).max(axis=0)
+        observed = obs[best] - shift[best]
+    else:
+        best = int(np.argmax(obs))
+        observed = obs[best]
+
+        def evaluate(idx):
+            return np.max([cols.cmi_batch(c, K, z, Kz, idx) for c, K in codes], axis=0)
+
+        null = _null_statistics(settings.n_perm_pairs, lambda: perm(z), evaluate, observed, settings.alpha_pairs, batch)
+    if _pvalue(null, observed) <= settings.alpha_pairs:
         return pairs[best]
     return None
 
@@ -627,24 +700,53 @@ def _per_source_nulls(cols, sources, cond, n_perm, perm):
     return np.stack([_individual(cols, sources, cond, v, idx) for v in sources], axis=1)
 
 
-def _prune(cols, sources, cond, n_perm, alpha, perm, debiased=False):
+def _can_curtail(perm, debiased, batch):
+    return batch is not None and not debiased and not getattr(perm, "uses_condition", False)
+
+
+def _prune(cols, sources, cond, n_perm, alpha, perm, debiased=False, batch=None):
     sources = list(sources)
     while sources:
         obs = np.array(list(cols.map(lambda v, sources=sources: _individual(cols, sources, cond, v), sources)))
-        nulls = _per_source_nulls(cols, sources, cond, n_perm, perm)
-        shift = _centers(nulls.T, debiased)
-        k = int(np.argmin(obs - shift))
-        null = (nulls - shift).min(axis=1)
-        if _pvalue(null, obs[k] - shift[k]) <= alpha:
+        if _can_curtail(perm, debiased, batch):
+            k = int(np.argmin(obs))
+
+            def evaluate(idx, sources=sources):
+                return np.min([_individual(cols, sources, cond, v, idx) for v in sources], axis=0)
+
+            null = _null_statistics(n_perm, perm, evaluate, obs[k], alpha, batch)
+            observed = obs[k]
+        else:
+            nulls = _per_source_nulls(cols, sources, cond, n_perm, perm)
+            shift = _centers(nulls.T, debiased)
+            k = int(np.argmin(obs - shift))
+            null = (nulls - shift).min(axis=1)
+            observed = obs[k] - shift[k]
+        if _pvalue(null, observed) <= alpha:
             break
         sources.pop(k)
     return sources
 
 
-def _sequential(cols, sources, cond, n_perm, alpha, perm, debiased=False):
+def _sequential(cols, sources, cond, n_perm, alpha, perm, debiased=False, batch=None):
     obs = np.array(list(cols.map(lambda v: _individual(cols, sources, cond, v), sources)))
-    nulls = _per_source_nulls(cols, sources, cond, n_perm, perm)
-    shift = _centers(nulls.T, debiased)
+    if _can_curtail(perm, debiased, batch):
+        # Curtail on the first (largest) rank: if it fails, every source fails.
+        rows = []
+
+        def evaluate(idx):
+            block = np.stack([_individual(cols, sources, cond, v, idx) for v in sources], axis=1)
+            rows.append(block)
+            return block.max(axis=1)
+
+        top = _null_statistics(n_perm, perm, evaluate, obs.max(), alpha, batch)
+        nulls = np.vstack(rows)
+        if _pvalue(top, obs.max()) > alpha:
+            return {v: (_pvalue(top, obs.max()) if i == int(np.argmax(obs)) else 1.0) for i, v in enumerate(sources)}
+        shift = np.zeros(len(sources))
+    else:
+        nulls = _per_source_nulls(cols, sources, cond, n_perm, perm)
+        shift = _centers(nulls.T, debiased)
     obs = obs - shift
     order = np.argsort(-obs)
     null = np.sort(nulls - shift, axis=1)[:, ::-1]
@@ -745,7 +847,28 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         setattr(perm, "uses_condition", True)  # noqa: B010
 
     deb = settings.statistic == "debiased"
-    past = _greedy(cols, target_cands, conditionals, settings.n_perm_max_stat, settings.alpha_max_stat, perm, deb)
+    curtail = settings.curtail if settings.curtail is not None else settings.estimator == "ksg"
+    bt = settings.curtail_batch if curtail else None
+    past = _greedy(cols, target_cands, conditionals, settings.n_perm_max_stat, settings.alpha_max_stat, perm, deb, bt)
+    all_source_cands = list(source_cands)
+    if settings.prescreen_alpha is not None:
+        kept = []
+        for p in sources:
+            lags = [v for v in source_cands if v[0] == p]
+            _, _, pv = _max_statistic(
+                cols,
+                lags,
+                conditionals + past,
+                settings.n_perm_prescreen,
+                perm,
+                deb,
+                settings.prescreen_alpha,
+                settings.curtail_batch,
+            )
+            if pv <= settings.prescreen_alpha:
+                kept.append(p)
+        source_cands = [v for v in source_cands if v[0] in kept]
+        result.prescreened = kept
     selected = []
     remaining = list(source_cands)
     for _ in range(4):
@@ -757,6 +880,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
             settings.alpha_max_stat,
             perm,
             deb,
+            bt,
         )
         selected += new
         remaining = [v for v in remaining if v not in selected]
@@ -770,6 +894,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
             settings.alpha_max_stat,
             perm,
             deb,
+            bt,
         )
         past += more
         if more:
@@ -779,7 +904,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         pool = remaining + [v for v in target_cands if v not in past]
         if len(pool) < 2:
             break
-        pair = _pair_search(cols, pool, conditionals + past + selected, settings, perm)
+        pair = _pair_search(cols, pool, conditionals + past + selected, settings, perm, bt)
         if pair is None:
             break
         for v in pair:
@@ -789,18 +914,24 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     base = conditionals + past
 
     if selected:
-        selected = _prune(cols, selected, base, settings.n_perm_min_stat, settings.alpha_min_stat, perm, deb)
+        selected = _prune(cols, selected, base, settings.n_perm_min_stat, settings.alpha_min_stat, perm, deb, bt)
     result.target_past = past
     result.sources = selected
     if selected:
         s, Ks = cols.joint(selected)
         z, Kz = cols.context(base)
         result.omnibus_te = cols.cmi(s, Ks, z, Kz)
-        idx = [perm(z) for _ in range(settings.n_perm_omnibus)]
-        null = cols.cmi_batch(s, Ks, z, Kz, idx)
+        null = _null_statistics(
+            settings.n_perm_omnibus,
+            lambda: perm(z),
+            lambda idx: cols.cmi_batch(s, Ks, z, Kz, idx),
+            result.omnibus_te,
+            settings.alpha_omnibus,
+            bt,
+        )
         result.omnibus_pvalue = _pvalue(null, result.omnibus_te)
         result.source_pvalues = _sequential(
-            cols, selected, base, settings.n_perm_max_seq, settings.alpha_max_seq, perm, deb
+            cols, selected, base, settings.n_perm_max_seq, settings.alpha_max_seq, perm, deb, bt
         )
         result.sources = [v for v in selected if result.source_pvalues[v] <= settings.alpha_max_seq]
         result.significant = result.omnibus_pvalue <= settings.alpha_omnibus and bool(result.sources)
@@ -810,8 +941,8 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         for p in sources:
             if p in parents:
                 continue
-            cands = [v for v in source_cands if v[0] == p]
-            best, value, pv = _max_statistic(cols, cands, [], settings.n_perm_tdmi, perm, deb)
+            cands = [v for v in all_source_cands if v[0] == p]
+            best, value, pv = _max_statistic(cols, cands, [], settings.n_perm_tdmi, perm, deb, settings.alpha_tdmi, bt)
             result.tdmi_candidates[p] = {"variable": best, "tdmi": value, "pvalue": pv}
     return result
 

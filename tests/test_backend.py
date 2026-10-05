@@ -75,7 +75,7 @@ def test_ksg_batch_matches_trees(device):
         v = digamma(4) - np.mean(
             digamma(count(np.column_stack([xv, z]))) + digamma(count(np.column_stack([y, z]))) - digamma(count(z))
         )
-        return max(v / np.log(2), 0.0)
+        return v / np.log(2)
 
     expected = np.array([reference(b[:, 0]) for b in batch])
     assert np.allclose(got, expected, atol=1e-9 if device != "mps" else 2e-3)

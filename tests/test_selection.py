@@ -162,3 +162,38 @@ def test_ksg_local_null_keeps_children_out_of_parent_sets():
     assert select_parents(result.data, 1, result.embeddings, None, settings, 0).parents() == [0]
     with pytest.raises(ValueError, match="ksg_null"):
         SkeletonSettings(ksg_null="nearby").check()
+
+
+def test_curtailed_tests_reach_the_same_decisions():
+    data = DiscreteData.from_discrete(_chain(3000, np.random.default_rng(5)))
+    for t in range(3):
+        full = select_parents(data, t, Embedding(max_lag=3), None, SkeletonSettings(**FAST, curtail=False), 0)
+        cut = select_parents(data, t, Embedding(max_lag=3), None, SkeletonSettings(**FAST, curtail=True), 0)
+        assert full.target_past == cut.target_past and full.sources == cut.sources
+        assert full.significant == cut.significant
+
+
+def test_ksg_local_permutation_and_prescreen():
+    from infoflow.preprocess import preprocess
+    from infoflow.selection import _KsgColumns
+
+    rng = np.random.default_rng(7)
+    n = 800
+    x, w = rng.normal(size=n), rng.normal(size=n)
+    y = np.zeros(n)
+    for t in range(1, n):
+        y[t] = 0.4 * y[t - 1] + 0.8 * x[t - 1] + 0.5 * rng.normal()
+    result = preprocess(np.stack([x, w, y], axis=1), max_lag=2, prng=0)
+    cols = _KsgColumns(result.data, 2, [(2, 1), (0, 1), (1, 1)], 2)
+    z = cols.joint([(2, 1)])[0]
+    choice = cols.local_permutation(z, np.random.default_rng(0))
+    neighbors = cols._contexts[("neighbors", z.shape, hash(np.asarray(z, dtype=float).tobytes()))]
+    assert all(c in row for c, row in zip(choice, neighbors, strict=True))
+    assert len(np.unique(choice)) > 0.9 * len(choice)
+    settings = dataclasses.replace(
+        SkeletonSettings(**FAST), estimator="ksg", prescreen_alpha=0.05, synergy_search=False, tdmi_screen=False
+    )
+    sk = select_parents(result.data, 2, result.embeddings, None, settings, 0)
+    assert sk.parents() == [0] and 0 in sk.prescreened
+    full = select_parents(result.data, 2, result.embeddings, None, dataclasses.replace(settings, curtail=False), 0)
+    assert full.sources == sk.sources
