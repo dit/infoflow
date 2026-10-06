@@ -80,9 +80,10 @@ class SkeletonSettings:
     every decision unchanged and saves most permutations in the many tests that fail.
     ``prescreen_alpha`` first tests each source process on its own (its best lag's
     transfer entropy given the selected target past, ``n_perm_prescreen`` permutations)
-    and keeps only those passing for the multivariate search; this makes large networks
-    tractable, at the risk of missing a source that is informative only jointly with
-    another. Conditioning on a parent
+    and keeps only those passing for the multivariate search, at the risk of missing a
+    source that is informative only jointly with another. The screened-out sources still
+    enter the max-statistic nulls, which keeps the selection's error rate; the saving is
+    in the search, not the nulls. Conditioning on a parent
     continuously removes its influence exactly, where bins leave a residue inside
     each bin that can hide weak edges; the layers are still estimated on symbols.
     It is much slower.
@@ -688,9 +689,13 @@ def _null_statistics(n_perm, draw, evaluate, observed, alpha=None, batch=None):
     return np.asarray(values)
 
 
-def _max_statistic(cols, candidates, cond, n_perm, perm, debiased=False, alpha=None, batch=None):
+def _max_statistic(cols, candidates, cond, n_perm, perm, debiased=False, alpha=None, batch=None, screened=()):
     """
     The best candidate, its CMI, and the max-statistic p-value.
+
+    `screened` candidates are not searched but still enter the null maximum: when a
+    data-driven screen removed them, a null over the survivors alone ignores that they
+    survived for having large statistics, and the test is anti-conservative.
 
     With `debiased`, candidates are ranked by their CMI minus the mean of their own
     null, and the null maximum is taken over equally centered values: plug-in biases
@@ -700,28 +705,29 @@ def _max_statistic(cols, candidates, cond, n_perm, perm, debiased=False, alpha=N
     (:func:`_null_statistics`).
     """
     z, Kz = cols.context(cond)
+    family = list(candidates) + [v for v in screened if v not in candidates]
     obs = np.array(list(cols.map(lambda v: cols.cmi(cols.column(v)[0], cols.alphabet[v], z, Kz), candidates)))
     if debiased:
         idx = [perm(z) for _ in range(n_perm)]
-        nulls = np.array([cols.cmi_batch(cols.column(v)[0], cols.alphabet[v], z, Kz, idx) for v in candidates])
+        nulls = np.array([cols.cmi_batch(cols.column(v)[0], cols.alphabet[v], z, Kz, idx) for v in family])
         shift = _centers(nulls, True)
-        best = int(np.argmax(obs - shift))
+        best = int(np.argmax(obs - shift[: len(obs)]))
         null = (nulls - shift[:, None]).max(axis=0)
         return candidates[best], float(obs[best]), _pvalue(null, obs[best] - shift[best])
     best = int(np.argmax(obs))
 
     def evaluate(idx):
-        return np.max([cols.cmi_batch(cols.column(v)[0], cols.alphabet[v], z, Kz, idx) for v in candidates], axis=0)
+        return np.max([cols.cmi_batch(cols.column(v)[0], cols.alphabet[v], z, Kz, idx) for v in family], axis=0)
 
     null = _null_statistics(n_perm, lambda: perm(z), evaluate, obs[best], alpha, batch)
     return candidates[best], float(obs[best]), _pvalue(null, obs[best])
 
 
-def _greedy(cols, candidates, cond, n_perm, alpha, perm, debiased=False, batch=None):
+def _greedy(cols, candidates, cond, n_perm, alpha, perm, debiased=False, batch=None, screened=()):
     selected = []
     candidates = list(candidates)
     while candidates:
-        best, _, p = _max_statistic(cols, candidates, cond + selected, n_perm, perm, debiased, alpha, batch)
+        best, _, p = _max_statistic(cols, candidates, cond + selected, n_perm, perm, debiased, alpha, batch, screened)
         if p > alpha:
             break
         selected.append(best)
@@ -958,6 +964,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
                 kept.append(p)
         source_cands = [v for v in source_cands if v[0] in kept]
         result.prescreened = kept
+    screened = [v for v in all_source_cands if v not in source_cands]
     selected = []
     remaining = list(source_cands)
     for _ in range(4):
@@ -970,6 +977,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
             perm,
             deb,
             bt,
+            screened,
         )
         selected += new
         remaining = [v for v in remaining if v not in selected]
@@ -990,7 +998,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
             continue
         if not settings.synergy_search:
             break
-        pool = remaining + [v for v in target_cands if v not in past]
+        pool = remaining + screened + [v for v in target_cands if v not in past]
         if len(pool) < 2:
             break
         pair = _pair_search(cols, pool, conditionals + past + selected, settings, perm, bt)
@@ -1000,6 +1008,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
             (past if v[0] == target else selected).append(v)
         result.pairs.append(pair)
         remaining = [v for v in remaining if v not in pair]
+        screened = [v for v in screened if v not in pair]
     base = conditionals + past
 
     if selected:

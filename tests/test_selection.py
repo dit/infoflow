@@ -224,3 +224,26 @@ def test_gaussian_estimator():
         assert len(set(sk.parents()) & true) >= len(true) - 1  # at most one weak link missed
     with pytest.raises(ValueError, match="raw series"):
         select_parents(DiscreteData.from_discrete([np.zeros((100, 2), dtype=int)]), 1, None, None, settings, 0)
+
+
+def test_screened_candidates_enter_null():
+    from infoflow.benchmarks import random_network, simulate_network
+    from infoflow.preprocess import preprocess
+    from infoflow.selection import _GaussianColumns, _max_statistic
+
+    graph = random_network(12, mean_in_degree=0.0, prng=2)
+    result = preprocess(simulate_network(graph, 3000, "var", prng=2), max_lag=2, prng=0)
+    cands = [(p, 1) for p in range(1, 12)]
+    cols = _GaussianColumns(result.data, 0, [(0, 1), *cands], 2)
+    z, Kz = cols.context([(0, 1)])
+    obs = [cols.cmi(cols.column(v)[0], cols.alphabet[v], z, Kz) for v in cands]
+    top = [cands[i] for i in np.argsort(obs)[-2:]]
+    rest = [v for v in cands if v not in top]
+
+    def pvalue(screened):
+        rng = np.random.default_rng(0)
+        return _max_statistic(cols, top, [(0, 1)], 200, lambda z=None: rng.permutation(cols.n), screened=screened)[2]
+
+    biased, corrected = pvalue(()), pvalue(rest)
+    assert corrected >= biased
+    assert corrected > 0.05
