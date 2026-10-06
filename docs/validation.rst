@@ -77,11 +77,21 @@ logistic maps, plug-in               1000   0.87       0.20    0.999        4 mi
 logistic maps, plug-in               3000   0.99       0.43    0.9999       11 min
 logistic maps, plug-in               10000  0.95       0.59    0.999        31 min
 logistic maps, KSG (20 targets)      10000  0.98       1.00    0.9995       202 min
+VAR, Gaussian, no pre-screen         1000   0.93       0.56    0.999        11 min
+VAR, Gaussian, no pre-screen         3000   0.96       0.85    0.999        29 min
+VAR, Gaussian, no pre-screen         10000  0.94       1.00    0.998        122 min
+logistic maps, Gaussian, no pre-sc.  10000  0.93       0.64    0.999        25 min
 ===================================  =====  =========  ======  ===========  =======
+
+The plug-in and KSG rows were run before the pre-screened-out sources were added to
+the max-statistic nulls, so their selections were somewhat anti-conservative (on the
+empty network, 37 false parents with plug-in). The Gaussian rows use the corrected
+selection without pre-screening, which for this estimator is also faster.
 
 The intrinsic layer is more precise still (0.92–1.00) at somewhat lower recall. On
 an empty 100-node network with 10 000 samples the false-positive rate was 0.4% for
-selected parents and 0.06% in the intrinsic layer.
+selected parents and 0.06% in the intrinsic layer; with the Gaussian estimator and
+no pre-screen it was 0.11% (11 links) and 0.03%.
 
 With the KSG estimator on coupled logistic maps, every one of the 41 true links into
 the 20 sampled targets was recovered with one false link, matching the
@@ -91,3 +101,8 @@ the plug-in path stays conservative (recall 0.30, rising to 0.50 with the strata
 at a small cost in precision), and KSG is not the remedy there: each parent explains
 only about 2% of its target's variance, which needs the efficiency of a parametric
 (linear-Gaussian) estimator, the one :cite:`Novelli2019` used for these networks.
+With ``estimator="gaussian"`` every true VAR link is recovered at 10 000 samples, with
+exact lags and precision 0.94 (0.98 in the intrinsic layer), close to the
+precision above 0.95 and recall near 1 that :cite:`Novelli2019` report there. On the
+nonlinear logistic maps it misses about a third of the links, as a linear estimator
+should; KSG is the estimator for those.
