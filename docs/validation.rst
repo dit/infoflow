@@ -102,7 +102,8 @@ at a small cost in precision), and KSG is not the remedy there: each parent expl
 only about 2% of its target's variance, which needs the efficiency of a parametric
 (linear-Gaussian) estimator, the one :cite:`Novelli2019` used for these networks.
 With ``estimator="gaussian"`` every true VAR link is recovered at 10 000 samples, with
-exact lags and precision 0.94 (0.98 in the intrinsic layer), close to the
-precision above 0.95 and recall near 1 that :cite:`Novelli2019` report there. On the
+exact lags and precision 0.94 (0.98 in the intrinsic layer). :cite:`Novelli2019`
+report precision, recall, and specificity above 98% at this size and length, at the
+stricter level 0.001 (here 0.01, which trades some precision for recall). On the
 nonlinear logistic maps it misses about a third of the links, as a linear estimator
 should; KSG is the estimator for those.
