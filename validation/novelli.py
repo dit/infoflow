@@ -43,8 +43,8 @@ def main():
         null=args.null,
         statistic=args.statistic,
         prescreen_alpha=args.prescreen,
-        **{f"alpha_{s}": args.alpha for s in ("max_stat", "min_stat", "omnibus", "max_seq")},
-        **{f"n_perm_{s}": n_perm for s in ("max_stat", "min_stat", "omnibus", "max_seq")},
+        **{f"alpha_{s}": args.alpha for s in ("max_stat", "min_stat", "omnibus", "max_seq", "pairs")},
+        **{f"n_perm_{s}": n_perm for s in ("max_stat", "min_stat", "omnibus", "max_seq", "pairs")},
     )
     ds = network_validation(
         args.kind,
