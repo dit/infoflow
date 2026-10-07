@@ -23,7 +23,9 @@ def main():
     parser.add_argument("--reps", type=int, default=3)
     parser.add_argument("--in-degree", type=float, default=3.0, help="0 gives empty networks (false-positive rate)")
     parser.add_argument("--alpha", type=float, default=0.01, help="significance level of every selection stage")
-    parser.add_argument("--estimator", choices=("plugin", "ksg", "adaptive", "gaussian"), default="plugin")
+    parser.add_argument(
+        "--estimator", choices=("plugin", "ksg", "adaptive", "gaussian", "trend", "coarse"), default="plugin"
+    )
     parser.add_argument("--null", choices=("free", "strata"), default="free", help="selection null (plug-in/adaptive)")
     parser.add_argument("--statistic", choices=("raw", "debiased"), default="raw", help="selection statistic")
     parser.add_argument("--threads", type=int, default=8, help="targets inferred in parallel")

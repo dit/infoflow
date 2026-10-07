@@ -75,6 +75,13 @@ class SkeletonSettings:
     vector-autoregressive data :cite:`Novelli2019`: far more powerful than symbols or
     KSG when couplings are linear and weak, blind to nonlinear ones.
 
+    ``estimator='trend'`` keeps symbols (``trend_bins`` equal-frequency bins) but tests
+    a stratified ordinal trend: one degree of freedom per candidate, so weak monotone
+    couplings are found with far fewer samples than the plug-in CMI, at the price of
+    missing non-monotone ones. ``estimator='coarse'`` keeps the plug-in CMI on
+    binary candidates and context bins that shrink with the conditioning set (about
+    ``coarse_min_cell`` samples per cell), trading resolution for degrees of freedom.
+
     ``curtail`` (default: on for KSG and Gaussian) evaluates permutations ``curtail_batch`` at a time
     and stops a test as soon as its p-value must exceed the stage's level, which leaves
     every decision unchanged and saves most permutations in the many tests that fail.
@@ -118,6 +125,8 @@ class SkeletonSettings:
     statistic: str = "raw"
     adaptive_target_bins: int = 6
     adaptive_candidate_bins: int = 4
+    trend_bins: int = 4
+    coarse_min_cell: int = 10
     ksg_k: int = 4
     ksg_threads: int | None = None
     ksg_null: str = "local"
@@ -136,8 +145,8 @@ class SkeletonSettings:
             check_n_perm(self.n_perm_tdmi, self.alpha_tdmi)
         if self.ksg_null not in ("permutation", "local"):
             raise ValueError("ksg_null must be 'permutation' or 'local'")
-        if self.estimator not in ("plugin", "ksg", "adaptive", "gaussian"):
-            raise ValueError("estimator must be 'plugin', 'ksg', 'adaptive', or 'gaussian'")
+        if self.estimator not in ("plugin", "ksg", "adaptive", "gaussian", "trend", "coarse"):
+            raise ValueError("estimator must be 'plugin', 'ksg', 'adaptive', 'gaussian', 'trend', or 'coarse'")
         if self.null not in ("free", "strata"):
             raise ValueError("null must be 'free' or 'strata'")
         if self.statistic not in ("raw", "debiased"):
@@ -281,6 +290,26 @@ def _equal_frequency(ranks, bins):
     return np.minimum((ranks * bins).astype(np.int64), bins - 1)
 
 
+def _residual_bits(E, ey, vy):
+    """
+    :math:`\\tfrac12 \\log_2` of the target's residual variance `vy` over what remains after
+    regressing residuals `ey` on each residualized candidate block ``E`` (B, n, dx).
+    """
+    if E.shape[2] == 1:
+        e = E[:, :, 0]
+        num = e @ ey
+        den = np.einsum("bn,bn->b", e, e)
+        explained = np.where(den > 0, num**2 / np.where(den > 0, den, 1), 0.0)
+    else:
+        G = np.einsum("bni,bnj->bij", E, E)
+        g = np.einsum("bni,n->bi", E, ey)
+        ridge = 1e-12 * np.eye(G.shape[1])
+        sol = np.linalg.solve(G + ridge, g[..., None])[..., 0]
+        explained = np.einsum("bi,bi->b", g, sol)
+    residual = np.maximum(vy - explained, 1e-300)
+    return 0.5 * np.log2(vy / residual)
+
+
 class _GaussianColumns:
     """
     The raw values of one target's realizations, for linear-Gaussian estimates.
@@ -334,19 +363,7 @@ class _GaussianColumns:
         CMI (bits) for candidate blocks ``X`` of shape (B, n, dx).
         """
         E = X - np.einsum("nk,bk...->bn...", q, np.einsum("nk,bn...->bk...", q, X))
-        if E.shape[2] == 1:
-            e = E[:, :, 0]
-            num = e @ ey
-            den = np.einsum("bn,bn->b", e, e)
-            explained = np.where(den > 0, num**2 / np.where(den > 0, den, 1), 0.0)
-        else:
-            G = np.einsum("bni,bnj->bij", E, E)
-            g = np.einsum("bni,n->bi", E, ey)
-            ridge = 1e-12 * np.eye(G.shape[1])
-            sol = np.linalg.solve(G + ridge, g[..., None])[..., 0]
-            explained = np.einsum("bi,bi->b", g, sol)
-        residual = np.maximum(vy - explained, 1e-300)
-        return 0.5 * np.log2(vy / residual)
+        return _residual_bits(E, ey, vy)
 
     def cmi(self, c, Kc, z, Kz):
         """
@@ -422,6 +439,135 @@ class _AdaptiveColumns(_Columns):
             binned = np.stack([codes(c, k) for c, k in zip(columns, cuts[1:], strict=True)], axis=1)
             self._contexts[key] = dense_codes(binned)
         return self._contexts[key]
+
+
+class _RankColumns(_Columns):
+    """
+    Equal-frequency bins of the ranks of the raw values (shared by the trend and
+    coarse estimators): `target_bins` for the target's present, `source_bins` for
+    every candidate.
+    """
+
+    def __init__(self, data, target, variables, max_lag, target_bins, source_bins):
+        self.r = realizations(data, target, variables, max_lag=max_lag)
+        self.variables = list(self.r.variables)
+        self.index = {v: i for i, v in enumerate(self.variables)}
+        y, values = _raw_columns(data, self.r, target)
+        self._ranked = (
+            np.column_stack([_ranks(values[:, i]) for i in range(values.shape[1])]) if values.size else values
+        )
+        self.y, self.Ky = _equal_frequency(_ranks(y), target_bins), target_bins
+        self._codes = _equal_frequency(self._ranked, source_bins) if values.size else values.astype(np.int64)
+        self.alphabet = dict.fromkeys(self.variables, source_bins)
+        self.n = len(self.y)
+        self.map = map
+        self.device = None
+        self._contexts = {}
+
+    def column(self, v):
+        return self._codes[:, self.index[v]], self.alphabet[v]
+
+    def _binned_context(self, variables, bins):
+        key = (tuple(variables), bins)
+        if key not in self._contexts:
+            code, K = np.zeros(self.n, dtype=np.int64), 1
+            for v in variables:
+                code, K = _combine(code, K, _equal_frequency(self._ranked[:, self.index[v]], bins), bins)
+            self._contexts[key] = _densify(code)
+        return self._contexts[key]
+
+
+class _CoarseColumns(_RankColumns):
+    """
+    Plug-in CMI on coarse symbols: binary (median-split) candidates, and context bins
+    per variable that shrink as the conditioning set grows, so that a cell of
+    (target, candidate, context) keeps about `min_cell` expected samples.
+
+    A plug-in test has :math:`(K_x - 1)(K_y - 1) K_z` degrees of freedom; splitting a
+    linearly coupled Gaussian source at its median keeps :math:`2/\\pi` of its squared
+    correlation with the target while dividing that by :math:`K_x - 1`. The bins depend
+    only on the sample size and the size of the conditioning set, never on the data,
+    so permutation nulls stay valid.
+    """
+
+    def __init__(self, data, target, variables, max_lag, target_bins=4, source_bins=2, min_cell=10, max_bins=4):
+        super().__init__(data, target, variables, max_lag, target_bins, source_bins)
+        self.min_cell = min_cell
+        self.max_bins = max_bins
+        self._source_bins = source_bins
+
+    def context_bins(self, d):
+        budget = self.n / (self.min_cell * self.Ky * self._source_bins)
+        return int(np.clip(np.floor(budget ** (1 / d)), 2, self.max_bins)) if d else 1
+
+    def context(self, variables):
+        if not variables:
+            return np.zeros(self.n, dtype=np.int64), 1
+        return self._binned_context(variables, self.context_bins(len(variables)))
+
+
+class _TrendColumns(_RankColumns):
+    """
+    A stratified ordinal-trend (linear-by-linear association) statistic on symbols.
+
+    The target's present and the candidates are scored by their equal-frequency bin
+    (`bins` levels); the conditioning set is cut into the same bins and used as strata.
+    Within every stratum the scores are centered, and the statistic is the
+    linear-Gaussian CMI of the centered scores,
+    :math:`\\tfrac12 \\log_2 \\sigma^2(Y \\mid Z) / \\sigma^2(Y \\mid X, Z)`, i.e. a regression of
+    the target's score on the candidate's with one intercept per stratum. A single
+    candidate costs one degree of freedom instead of the plug-in's
+    :math:`(K_x - 1)(K_y - 1) K_z`, so monotone couplings are detected with far fewer
+    samples; non-monotone ones (e.g. XOR) are invisible to it. Generalizes the
+    Cochran-Mantel-Haenszel test for ordered tables :cite:`Agresti2013`.
+    """
+
+    def __init__(self, data, target, variables, max_lag, bins=4):
+        super().__init__(data, target, variables, max_lag, bins, bins)
+        self.bins = bins
+        self._yscore = self.y.astype(float)
+        self._scores = self._codes.astype(float)
+        self._strata = {}
+
+    def column(self, v):
+        return self._scores[:, self.index[v]], 1
+
+    def joint(self, variables):
+        cols = [self.index[v] for v in variables]
+        return self._scores[:, cols], len(cols)
+
+    def context(self, variables):
+        if not variables:
+            return np.zeros(self.n, dtype=np.int64), 1
+        return self._binned_context(variables, self.bins)
+
+    def _stratum(self, z, Kz):
+        from scipy.sparse import csr_matrix
+
+        z = np.asarray(z, dtype=np.int64)
+        key = (Kz, hash(z.tobytes()))
+        if key not in self._strata:
+            S = csr_matrix((np.ones(self.n), (np.arange(self.n), z)), shape=(self.n, Kz))
+            counts = np.maximum(np.bincount(z, minlength=Kz), 1).astype(float)
+            ey = self._yscore - (S @ ((S.T @ self._yscore) / counts))
+            self._strata[key] = (S, counts, ey, float(ey @ ey))
+            if len(self._strata) > 64:
+                self._strata.pop(next(iter(self._strata)))
+        return self._strata[key]
+
+    def _values(self, X, z, Kz):
+        S, counts, ey, vy = self._stratum(z, Kz)
+        B, n, d = X.shape
+        flat = X.transpose(1, 0, 2).reshape(n, B * d)
+        centered = flat - S @ ((S.T @ flat) / counts[:, None])
+        return _residual_bits(centered.reshape(n, B, d).transpose(1, 0, 2), ey, vy)
+
+    def cmi(self, c, Kc, z, Kz):
+        return float(self._values(np.asarray(c, dtype=float).reshape(1, self.n, -1), z, Kz)[0])
+
+    def cmi_batch(self, c, Kc, z, Kz, idx):
+        c = np.asarray(c, dtype=float).reshape(self.n, -1)
+        return self._values(c[np.asarray(idx)], z, Kz)
 
 
 class _KsgColumns:
@@ -915,6 +1061,10 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         cols = _AdaptiveColumns(
             data, target, everything, max_lag, settings.adaptive_target_bins, settings.adaptive_candidate_bins
         )
+    elif settings.estimator == "trend":
+        cols = _TrendColumns(data, target, everything, max_lag, settings.trend_bins)
+    elif settings.estimator == "coarse":
+        cols = _CoarseColumns(data, target, everything, max_lag, min_cell=settings.coarse_min_cell)
     else:
         cols = _Columns(data, target, everything, max_lag)
     if settings.device is not None:

@@ -247,3 +247,41 @@ def test_screened_candidates_enter_null():
     biased, corrected = pvalue(()), pvalue(rest)
     assert corrected >= biased
     assert corrected > 0.05
+
+
+def test_trend_and_coarse_estimators():
+    from infoflow.benchmarks import random_network, simulate_network
+    from infoflow.preprocess import preprocess
+    from infoflow.selection import _CoarseColumns, _TrendColumns
+
+    graph = random_network(6, prng=3)
+    result = preprocess(simulate_network(graph, 4000, "var", prng=3), max_lag=5, prng=0)
+    target = max(graph.nodes, key=graph.in_degree)
+    variables = [(target, 1), *[(p, lag) for p in graph.nodes if p != target for lag in (1, 2)]]
+    trend = _TrendColumns(result.data, target, variables, 2)
+    x, _ = trend.column(variables[1])
+    z, Kz = trend.context([variables[0], variables[2]])
+    dummies = np.eye(Kz)[z]
+    y = trend._yscore
+
+    def residual(a, b):
+        return a - b @ np.linalg.lstsq(b, a, rcond=None)[0]
+
+    ey, ex = residual(y, dummies), residual(x, dummies)
+    explicit = 0.5 * np.log2((ey @ ey) / (residual(ey, ex[:, None]) @ residual(ey, ex[:, None])))
+    assert trend.cmi(x, 1, z, Kz) == pytest.approx(explicit, rel=1e-8)
+    idx = [np.random.default_rng(s).permutation(trend.n) for s in range(3)]
+    assert np.allclose(trend.cmi_batch(x, 1, z, Kz, idx), [trend.cmi(x[i], 1, z, Kz) for i in idx])
+    pair, _ = trend.joint(variables[1:3])
+    assert trend.cmi(pair, 2, z, Kz) >= trend.cmi(x, 1, z, Kz) - 1e-12
+
+    coarse = _CoarseColumns(result.data, target, variables, 2)
+    bins = [coarse.context_bins(d) for d in range(1, 6)]
+    assert bins == sorted(bins, reverse=True) and bins[0] <= 4 and bins[-1] >= 2
+    assert coarse.context(variables[:3])[1] <= coarse.context_bins(3) ** 3
+
+    for estimator in ("trend", "coarse"):
+        settings = dataclasses.replace(SkeletonSettings(**FAST), estimator=estimator, synergy_search=False)
+        sk = select_parents(result.data, target, result.embeddings, None, settings, 0)
+        assert set(sk.parents()) <= set(graph.predecessors(target))
+        assert sk.parents()
