@@ -19,5 +19,5 @@ for T in 1000 3000 10000; do
 done
 run val100_empty --kind var --in-degree 0 --samples 10000 --threads 4 --device mps
 run val100_var_strata --kind var --samples 10000 --null strata --statistic debiased --threads 4 --device mps
-run val100_logistic_ksg --kind logistic --samples 10000 --estimator ksg --n-targets 20 --threads 1
+run val100_logistic_ksg5 --kind logistic --samples 10000 --estimator ksg --n-targets 5 --threads 1
 echo LARGE DONE
