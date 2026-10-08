@@ -16,12 +16,12 @@ run() {
 }
 for est in trend coarse; do
     # coarse keeps plug-in CMI, whose permutation batches run on the GPU
-    D=()
-    [ $est = coarse ] && D=(--device mps)
+    D=(--estimator $est)
+    [ $est = coarse ] && D+=(--device mps)
     for T in 1000 3000 10000; do
-        run val100_var_${est}_T$T --kind var --samples $T --estimator $est "${D[@]}"
+        run val100_var_${est}_T$T --kind var --samples $T "${D[@]}"
     done
-    run val100_empty_${est} --kind var --in-degree 0 --samples 10000 --estimator $est "${D[@]}"
-    run val100_logistic_${est} --kind logistic --samples 10000 --estimator $est "${D[@]}"
+    run val100_empty_${est} --kind var --in-degree 0 --samples 10000 "${D[@]}"
+    run val100_logistic_${est} --kind logistic --samples 10000 "${D[@]}"
 done
 echo OPTIONS DONE
