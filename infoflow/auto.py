@@ -176,7 +176,7 @@ def _split_overrides(overrides):
     )
 
 
-def _diagnose(trials, names, prng):
+def _diagnose(trials, names, prng, max_lag=None):
     """
     The discrete data, embeddings, preprocessing report, and diagnostics of `trials`.
     """
@@ -193,10 +193,10 @@ def _diagnose(trials, names, prng):
         data = DiscreteData.from_discrete(trials, names)
         # The rank-based estimators read the symbols as raw values.
         data.raw = [np.asarray(t, dtype=float) for t in trials]
-        return data, Embedding(max_lag=3), None, diagnostics
+        return data, Embedding(max_lag=max_lag or 3), None, diagnostics
     from .preprocess.pipeline import preprocess
 
-    result = preprocess(trials, names=names, prng=prng)
+    result = preprocess(trials, names=names, max_lag=max_lag, prng=prng)
     for node in result.report.nodes:
         flags = list(node.flags)
         if node.screen is not None and getattr(node.screen, "nonstationary", False) and "nonstationary" not in flags:
@@ -350,6 +350,7 @@ def infer(
     time_budget=None,
     names=None,
     targets=None,
+    max_lag=None,
     threads=None,
     strict_budget=False,
     prng=None,
@@ -373,6 +374,9 @@ def infer(
         level is never loosened.
     names : list of str, None
     targets : list of int, None
+    max_lag : int, None
+        Upper bound on every node's lag budget (default: chosen by preprocessing; 3
+        for discrete data).
     threads : int, None
         Targets (and edges) processed in parallel (default: all cores).
     strict_budget : bool
@@ -399,7 +403,7 @@ def infer(
     pre_seed, run_seed = (int(s) for s in rng.integers(0, 2**32, size=2))
     threads = threads or os.cpu_count() or 1
     trials = as_trials(data)
-    discrete, embeddings, _, diagnostics = _diagnose(trials, names, pre_seed)
+    discrete, embeddings, _, diagnostics = _diagnose(trials, names, pre_seed, max_lag)
     P = discrete.n_processes
     targets = list(range(P)) if targets is None else list(targets)
     preset_options = PRESETS[preset]
