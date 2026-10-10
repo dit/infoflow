@@ -124,7 +124,8 @@ def test_parse_budget():
 
 
 PILOT: dict[str, Any] = {
-    "member_seconds": {"gaussian": 10.0, "trend": 20.0, "coarse": 30.0, "ksg": 1000.0},
+    "member_seconds": {"plugin": 30.0, "gaussian": 20.0, "ksg": 1000.0},
+    "usage": {"gaussian": 0.5},
     "prescreen": False,
     "parents_per_target": 2.0,
     "shared_per_target": 3.0,
@@ -132,7 +133,7 @@ PILOT: dict[str, Any] = {
     "interpret_seconds": 1.0,
 }
 OPTIONS: dict[str, Any] = {
-    "estimators": ("gaussian", "trend", "coarse", "ksg"),
+    "estimators": ("plugin", "gaussian", "ksg"),
     "prescreen": False,
     "include_shared_candidates": True,
     "interpret": True,
@@ -141,8 +142,9 @@ OPTIONS: dict[str, Any] = {
 
 
 def test_predict_counts_rounds_of_parallel_work():
-    # 10 targets on 4 threads: 3 rounds of selection; 20 parent + 30 shared edges: 13 rounds.
-    selection = 1060.0 * 3
+    # 10 targets on 4 threads: 3 rounds of selection (Gaussian on half the targets);
+    # 20 parent + 30 shared edges: 13 rounds.
+    selection = (30.0 + 0.5 * 20.0 + 1000.0) * 3
     layers = 5.0 * 13
     expected = selection + layers + 1.0 * 10 + auto._HYPEREDGE_FACTOR * layers
     assert auto._predict(OPTIONS, PILOT, 10, 4) == pytest.approx(expected)
@@ -154,10 +156,9 @@ def test_fit_budget_downgrades_in_order():
         "dropped KSG selection",
         "dropped layer estimates for shared-only candidates",
         "dropped hyperedge decomposition",
-        "dropped trend selection",
         "dropped no source pre-screen (pre-screen turned on)",
     ]
-    assert options["estimators"] == ("gaussian", "coarse")
+    assert options["estimators"] == ("plugin", "gaussian")
     assert options["prescreen"] and not options["include_shared_candidates"] and not options["hyperedges"]
     assert predicted == pytest.approx(auto._predict(options, PILOT, 10, 4))
     # A generous budget changes nothing; pinned options are never dropped.
@@ -166,7 +167,7 @@ def test_fit_budget_downgrades_in_order():
     assert pinned["estimators"] == OPTIONS["estimators"]
     assert not any("selection" in d for d in downgrades)
     # Stops as soon as the prediction fits.
-    budget = auto._predict(dict(OPTIONS, estimators=("gaussian", "trend", "coarse")), PILOT, 10, 4)
+    budget = auto._predict(dict(OPTIONS, estimators=("plugin", "gaussian")), PILOT, 10, 4)
     options, downgrades, _ = auto._fit_budget(OPTIONS, PILOT, 10, 4, budget, {})
     assert len(downgrades) == 1 and options["include_shared_candidates"]
 
@@ -177,7 +178,7 @@ def test_infer_discrete_chain():
     assert kind[0, 1] == "parent" and kind[1, 2] == "parent" and kind[0, 2] != "parent"
     report = result.report
     assert report.diagnostics["kind"] == "discrete"
-    assert report.estimators == ("coarse",)
+    assert report.estimators == ("plugin",)
     assert set(report.admitted) == {(0, 1), (1, 2)}
     assert "preset: fast" in str(report) and np.isfinite(report.predicted_seconds)
 
@@ -188,8 +189,10 @@ def test_infer_options_are_checked_and_pinned():
         auto.infer(data, preset="extreme")
     with pytest.raises(TypeError):
         auto.infer(data, not_an_option=1)
-    result = auto.infer(data, preset="fast", estimator="plugin", interpret=False, time_budget="1s", prng=0)
-    assert result.report.estimators == ("plugin",)
+    result = auto.infer(data, preset="fast", estimator="coarse", interpret=False, time_budget="1s", prng=0)
+    assert result.report.estimators == ("coarse",)
+    skeleton, infer_kwargs = auto._split_overrides({"estimator": "gaussian", "layer_estimator": "plugin"})
+    assert skeleton == {"estimator": "gaussian"} and infer_kwargs == {"estimator": "plugin"}
     assert result.report.options["interpret"] is False
 
 
@@ -225,3 +228,25 @@ def test_infer_reuses_pilot_skeletons_exactly():
     for t in range(5):
         assert plain.skeleton[t].sources == result.network.skeleton[t].sources
         assert plain.skeleton[t].target_past == result.network.skeleton[t].target_past
+
+
+def test_linearity_gate_flags_nonlinear_targets():
+    from infoflow.benchmarks import random_network, simulate_network
+    from infoflow.data import as_trials
+
+    mute, *_ = auto._diagnose(as_trials(datasets.mute_network(3000, seed=0)), None, 0, 5)
+    pvalues = auto.linearity_pvalues(mute)
+    assert {t for t, p in pvalues.items() if p < auto.LINEARITY_ALPHA} == {1, 3}
+    graph = random_network(8, prng=1)
+    linear, *_ = auto._diagnose(as_trials(simulate_network(graph, 3000, "var", prng=1)), None, 0, 5)
+    assert sum(p < auto.LINEARITY_ALPHA for p in auto.linearity_pvalues(linear).values()) <= 1
+    logistic, *_ = auto._diagnose(as_trials(simulate_network(graph, 3000, "logistic", prng=1)), None, 0, 5)
+    assert all(p < auto.LINEARITY_ALPHA for p in auto.linearity_pvalues(logistic).values())
+
+
+def test_infer_gates_gaussian_per_target():
+    result = auto.infer(datasets.mute_network(3000, seed=0), preset="fast", max_lag=5, prng=0)
+    report = result.report
+    assert report.diagnostics["nonlinear_targets"] == [1, 3]
+    assert result.network.settings["skeleton_settings"].target_estimators == {1: ("plugin",), 3: ("plugin",)}
+    assert all(name != "gaussian" for (s, t), name in report.admitted.items() if t in (1, 3))

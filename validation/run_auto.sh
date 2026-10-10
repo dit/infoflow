@@ -13,13 +13,15 @@ run() {
     [ -e $R/$name.nc ] || .venv/bin/python -u validation/auto.py --scenario $scenario --arm $arm --out $R/$name.nc \
         > $L/auto_$name.log 2>&1
 }
+# Continuous: the ensemble, its members (plugin, gaussian), and trend / coarse for reference.
 for scenario in mute orthogonal; do
-    for arm in auto gaussian trend coarse plugin; do run $scenario $arm; done
+    for arm in auto plugin gaussian trend coarse; do run $scenario $arm; done
 done
+# Discrete: the ensemble is the plug-in alone.
 for scenario in xor common_driver chain; do
-    for arm in auto coarse plugin; do run $scenario $arm; done
+    run $scenario auto
 done
 for scenario in var_T3000 logistic_T10000 empty_T10000 var_T10000; do
-    for arm in auto gaussian trend coarse; do run $scenario $arm; done
+    for arm in auto plugin gaussian; do run $scenario $arm; done
 done
 echo AUTO DONE

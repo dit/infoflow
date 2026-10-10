@@ -89,7 +89,8 @@ class SkeletonSettings:
     stage keeps its error rate whichever estimator detects a candidate. Recall is then
     close to the best member's on every kind of coupling. The permutation counts must
     reach :math:`\\alpha / k`. ``TargetSkeleton.admitted_by`` records which estimator
-    admitted each source.
+    admitted each source. ``target_estimators`` maps targets to their own estimator
+    (or ensemble), overriding ``estimator`` for them.
 
     ``curtail`` (default: on for KSG and Gaussian) evaluates permutations ``curtail_batch`` at a time
     and stops a test as soon as its p-value must exceed the stage's level, which leaves
@@ -130,6 +131,7 @@ class SkeletonSettings:
     fdr: bool = True
     fdr_constant: int = 1
     estimator: str | tuple = "plugin"
+    target_estimators: dict | None = None
     null: str = "free"
     statistic: str = "raw"
     adaptive_target_bins: int = 6
@@ -146,11 +148,14 @@ class SkeletonSettings:
     device: str | None = None
 
     def check(self):
-        names = (self.estimator,) if isinstance(self.estimator, str) else tuple(self.estimator)
         valid = ("plugin", "ksg", "adaptive", "gaussian", "trend", "coarse")
-        if not names or any(n not in valid for n in names) or len(set(names)) != len(names):
-            raise ValueError(f"estimator must be one of {valid}, or a tuple of distinct ones")
-        k = len(names)
+        ensembles = [self.estimator, *(self.target_estimators or {}).values()]
+        k = 1
+        for estimator in ensembles:
+            names = (estimator,) if isinstance(estimator, str) else tuple(estimator)
+            if not names or any(n not in valid for n in names) or len(set(names)) != len(names):
+                raise ValueError(f"estimator must be one of {valid}, or a tuple of distinct ones")
+            k = max(k, len(names))
         for name in ("max_stat", "min_stat", "omnibus", "max_seq"):
             check_n_perm(getattr(self, f"n_perm_{name}"), getattr(self, f"alpha_{name}") / k)
         if self.synergy_search:
@@ -1034,11 +1039,11 @@ def _source_lags(data, embeddings, process, max_lag):
     return replace(embedding, max_lag=max(max_lag, embedding.max_lag)).lags(int(data.lag_step[process]))
 
 
-def _estimators(settings):
+def _estimators(settings, target=None):
     """
-    The selection estimator names of `settings`, as a tuple.
+    The selection estimator names of `settings` for `target`, as a tuple.
     """
-    e = settings.estimator
+    e = (settings.target_estimators or {}).get(target, settings.estimator)
     return (e,) if isinstance(e, str) else tuple(e)
 
 
@@ -1299,7 +1304,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     # max_source_lag (IDTxl's max_lag_sources; default the larger of 5 and the largest
     # lag budget in the network), on each source's own grid.
     source_max = settings.max_source_lag or max(5, _max_budget(embeddings, P))
-    names = _estimators(settings)
+    names = _estimators(settings, target)
     if any(name in ("ksg", "gaussian") for name in names):
         # KSG resolves the target's own past finely enough that memory beyond the symbolic
         # lag budget matters; offer the target the source lag range (IDTxl's max_lag_target).

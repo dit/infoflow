@@ -1,13 +1,16 @@
 """
 Hands-off network inference: :func:`infer` chooses the methods from the data and a budget.
 
-The choices rest on the validation in :doc:`validation`. No single selection
-estimator wins everywhere: the linear-Gaussian and stratified-trend statistics are the
-most powerful on monotone couplings, coarse symbols on nonlinear ones, and the plug-in
-CMI keeps full resolution on discrete data. :func:`infer` therefore runs an ensemble of
-them in one greedy search at a Bonferroni-split level
-(:class:`~infoflow.selection.SkeletonSettings`), at the strict significance level
-0.001 at which every estimator kept its precision near 1. It times the selection on a
+The choices rest on the validation in :doc:`validation` and :doc:`auto`. The
+linear-Gaussian estimator is by far the most powerful on linear couplings, but it
+conditions linearly: when a target depends nonlinearly on what is conditioned on, the
+residual dependence makes its tests anti-conservative (false links between the
+children of a nonlinear driver). The plug-in CMI on the preprocessing symbols is far
+less powerful but stays precise. :func:`infer` therefore always selects with the
+plug-in and adds the Gaussian estimator, in one greedy search at a Bonferroni-split
+level (:class:`~infoflow.selection.SkeletonSettings`), only for targets whose
+dynamics pass a test for neglected nonlinearity (:func:`linearity_pvalues`). Every
+stage is tested at the strict level 0.001. It times the selection on a
 few sampled targets first (the pilot, whose skeletons are reused), predicts the cost
 of the whole run, and, if a ``time_budget`` is given, drops the most expensive options
 in a fixed order until the prediction fits. Every choice and its reason is recorded in
@@ -35,7 +38,7 @@ from .network import estimate_edge, infer_multiplex
 from .parallel import thread_map
 from .selection import SkeletonSettings, select_parents
 
-__all__ = ("PRESETS", "AutoReport", "AutoResult", "infer")
+__all__ = ("PRESETS", "AutoReport", "AutoResult", "infer", "linearity_pvalues")
 
 #: Selection significance level: precision stayed near 1 for every estimator at this level.
 ALPHA = 0.001
@@ -43,27 +46,31 @@ ALPHA = 0.001
 #: The options of each preset. ``continuous`` / ``discrete`` are the estimator ensembles.
 PRESETS = {
     "fast": {
-        "continuous": ("gaussian", "coarse"),
-        "discrete": ("coarse",),
+        "continuous": ("plugin", "gaussian"),
+        "discrete": ("plugin",),
         "include_shared_candidates": False,
         "interpret": False,
         "hyperedges": False,
     },
     "balanced": {
-        "continuous": ("gaussian", "trend", "coarse"),
-        "discrete": ("coarse", "plugin"),
+        "continuous": ("plugin", "gaussian"),
+        "discrete": ("plugin",),
         "include_shared_candidates": False,
         "interpret": True,
         "hyperedges": False,
     },
     "thorough": {
-        "continuous": ("gaussian", "trend", "coarse", "ksg"),
-        "discrete": ("coarse", "plugin"),
+        "continuous": ("plugin", "gaussian", "ksg"),
+        "discrete": ("plugin",),
         "include_shared_candidates": True,
         "interpret": True,
         "hyperedges": True,
     },
 }
+
+#: Level of the neglected-nonlinearity test that gates the Gaussian estimator; lenient,
+#: since a false alarm only falls back to the plug-in.
+LINEARITY_ALPHA = 0.05
 
 # Heuristic cost factors for options the pilot does not time directly.
 _PRESCREEN_FACTOR = 0.7
@@ -128,6 +135,11 @@ class AutoReport:
             f"time: predicted {fmt(self.predicted_seconds)}, actual {fmt(self.actual_seconds)}, "
             f"budget {fmt(self.time_budget)}",
         ]
+        if d.get("nonlinear_targets") is not None:
+            lines.append(
+                f"Gaussian selection gated off for {len(d['nonlinear_targets'])} target(s) that test nonlinear: "
+                + ", ".join(map(str, d["nonlinear_targets"]))
+            )
         if d.get("flagged"):
             lines.append("flagged nodes: " + "; ".join(f"{k}: {', '.join(v)}" for k, v in d["flagged"].items()))
         lines += [f"downgrade: {g}" for g in self.downgrades]
@@ -165,14 +177,22 @@ def _parse_budget(budget):
 
 
 def _split_overrides(overrides):
+    """
+    Pinned :class:`SkeletonSettings` fields and :func:`infer_multiplex` parameters.
+
+    ``estimator`` is the selection estimator; ``layer_estimator`` is passed on as
+    :func:`infer_multiplex`'s ``estimator`` (the layers' estimator).
+    """
+    overrides = dict(overrides)
+    layer = {"estimator": overrides.pop("layer_estimator")} if "layer_estimator" in overrides else {}
     skeleton_fields = {f.name for f in dataclasses.fields(SkeletonSettings)}
-    infer_params = set(inspect.signature(infer_multiplex).parameters) - {"data", "skeleton_settings"}
+    infer_params = set(inspect.signature(infer_multiplex).parameters) - {"data", "skeleton_settings", "estimator"}
     unknown = set(overrides) - skeleton_fields - infer_params
     if unknown:
         raise TypeError(f"unknown option(s) {sorted(unknown)}: not SkeletonSettings or infer_multiplex parameters")
     return (
         {k: v for k, v in overrides.items() if k in skeleton_fields},
-        {k: v for k, v in overrides.items() if k in infer_params},
+        {k: v for k, v in overrides.items() if k in infer_params} | layer,
     )
 
 
@@ -206,7 +226,77 @@ def _diagnose(trials, names, prng, max_lag=None):
     return result.data, result.embeddings, result.report, diagnostics
 
 
-def _skeleton_settings(estimators, prescreen, threads, device, pinned):
+def linearity_pvalues(data, targets=None, max_lag=5, max_regressors=None, bins=4):
+    """
+    Per-target p-values of a test that the target's present is linear in its past.
+
+    The present is regressed (least squares, with an intercept) on its own lags and on
+    the source lags most correlated with it. If the target is linear in its past, the
+    residual is independent of every regressor; dependence that survives the linear
+    fit is nonlinear. Each regressor is tested against the residual with the G-test
+    of the plug-in mutual information in ``bins`` x ``bins`` equal-frequency cells
+    (:math:`2 n \\ln 2 \\, \\hat I \\sim \\chi^2_{(b-1)^2}` under independence
+    :cite:`Cover2006`), and the smallest p-value is Bonferroni-corrected over the
+    regressors. Unlike a test of squared terms, this also sees nonlinearity in a
+    combination of the past (e.g. a logistic map of a weighted sum of inputs). A small
+    p-value means linear conditioning (the ``'gaussian'`` estimator) would leave
+    residual dependence for this target.
+
+    Parameters
+    ----------
+    data : DiscreteData
+        With raw series.
+    targets : list of int, None
+    max_lag : int
+    max_regressors : int, None
+        Linear regressors per target (default: a twentieth of the samples, at least 10).
+    bins : int
+
+    Returns
+    -------
+    dict
+        ``target -> p-value``.
+    """
+    from scipy.stats import chi2
+
+    from .selection import _cmi, _equal_frequency, _ranks
+
+    if data.raw is None:
+        raise ValueError("the linearity test needs the raw series")
+    P = data.n_processes
+    targets = list(range(P)) if targets is None else list(targets)
+    rows = [np.asarray(r, dtype=float) for r in data.raw if len(r) > max_lag + 1]
+    lagged = np.vstack([np.stack([r[max_lag - lag : len(r) - lag] for lag in range(max_lag + 1)], 1) for r in rows])
+    n = lagged.shape[0]
+    present, past = lagged[:, 0, :], lagged[:, 1:, :]
+    past = (past - past.mean(axis=0)) / np.where(past.std(axis=0) > 0, past.std(axis=0), 1.0)
+    budget = max_regressors or max(10, n // 20)
+    zero = np.zeros(n, dtype=np.int64)
+    dof = (bins - 1) ** 2
+    out = {}
+    for t in targets:
+        y = present[:, t]
+        own = past[:, :, t]
+        others = np.concatenate([past[:, :, p] for p in range(P) if p != t], axis=1) if P > 1 else own[:, :0]
+        keep = max(0, budget - own.shape[1])
+        if others.shape[1] > keep:
+            yc = y - y.mean()
+            corr = np.abs(others.T @ yc) / (np.linalg.norm(others, axis=0) * np.linalg.norm(yc) + 1e-300)
+            others = others[:, np.argsort(-corr)[:keep]]
+        X = np.column_stack([own, others])
+        design = np.column_stack([np.ones(n), X])
+        residual = y - design @ np.linalg.lstsq(design, y, rcond=None)[0]
+        r = _equal_frequency(_ranks(residual), bins)
+        smallest = 1.0
+        for k in range(X.shape[1]):
+            v = _equal_frequency(_ranks(X[:, k]), bins)
+            g = 2 * n * np.log(2) * _cmi(r, bins, v, bins, zero, 1)
+            smallest = min(smallest, float(chi2.sf(g, dof)))
+        out[t] = min(1.0, smallest * X.shape[1])
+    return out
+
+
+def _skeleton_settings(estimators, prescreen, threads, device, pinned, target_estimators=None):
     """
     Selection settings for an ensemble: every stage at :data:`ALPHA` split ``k`` ways,
     with enough permutations to reach it and curtailment (which never changes a decision).
@@ -216,6 +306,7 @@ def _skeleton_settings(estimators, prescreen, threads, device, pinned):
     stages = ("max_stat", "min_stat", "omnibus", "max_seq", "pairs")
     kwargs: dict[str, Any] = {
         "estimator": tuple(estimators),
+        "target_estimators": target_estimators or None,
         "curtail": True,
         "prescreen_alpha": 0.1 if prescreen else None,
         "n_perm_tdmi": max(200, int(np.ceil(k / 0.05))),
@@ -243,7 +334,8 @@ def _predict(options, pilot, n_targets, threads):
     Targets, and then edges, run `threads` at a time, so each phase takes as many
     rounds of its per-item time as it has full or partial batches of items.
     """
-    per_target = sum(pilot["member_seconds"].get(name, 0.0) for name in options["estimators"])
+    usage = pilot.get("usage", {})
+    per_target = sum(pilot["member_seconds"].get(name, 0.0) * usage.get(name, 1.0) for name in options["estimators"])
     if options["prescreen"] and not pilot["prescreen"]:
         per_target *= _PRESCREEN_FACTOR
     selection = per_target * _rounds(n_targets, threads)
@@ -264,7 +356,6 @@ _DOWNGRADES = (
     ("ksg", "KSG selection"),
     ("include_shared_candidates", "layer estimates for shared-only candidates"),
     ("hyperedges", "hyperedge decomposition"),
-    ("trend", "trend selection"),
     ("prescreen", "no source pre-screen (pre-screen turned on)"),
 )
 
@@ -284,7 +375,7 @@ def _fit_budget(options, pilot, n_targets, threads, budget, pinned):
     for key, label in _DOWNGRADES:
         if predicted <= budget:
             break
-        if key in ("ksg", "trend"):
+        if key == "ksg":
             if "estimator" in pinned or key not in options["estimators"] or len(options["estimators"]) == 1:
                 continue
             options["estimators"] = tuple(e for e in options["estimators"] if e != key)
@@ -386,7 +477,9 @@ def infer(
     **overrides
         Any :class:`~infoflow.selection.SkeletonSettings` field or
         :func:`~infoflow.infer_multiplex` parameter; pinned values are used as given
-        and never changed by the budget.
+        and never changed by the budget. ``estimator`` pins the selection estimator(s);
+        ``layer_estimator`` sets the layers' estimator (``infer_multiplex``'s
+        ``estimator``).
 
     Returns
     -------
@@ -411,6 +504,13 @@ def infer(
     estimators = (chosen,) if isinstance(chosen, str) else tuple(chosen)
     if "estimator" in overrides:
         pinned_skeleton["estimator"] = estimators
+    nonlinear = []
+    gate = diagnostics["kind"] == "continuous" and "gaussian" in estimators
+    if gate and "estimator" not in overrides and "target_estimators" not in pinned_skeleton:
+        pvalues = linearity_pvalues(discrete, targets, max_lag or 5)
+        nonlinear = [t for t in targets if pvalues[t] < LINEARITY_ALPHA]
+        diagnostics["linearity_pvalues"] = pvalues
+        diagnostics["nonlinear_targets"] = nonlinear
     options: dict[str, Any] = {
         "estimators": estimators,
         "prescreen": P > _PRESCREEN_ABOVE,
@@ -429,7 +529,11 @@ def infer(
 
     def settings_for(opts, ksg_threads_divisor):
         pinned = {k: v for k, v in pinned_skeleton.items() if k != "estimator"}
-        return _skeleton_settings(opts["estimators"], opts["prescreen"], ksg_threads_divisor, device, pinned)
+        reduced = tuple(e for e in opts["estimators"] if e != "gaussian")
+        per_target = dict.fromkeys(nonlinear, reduced) if "gaussian" in opts["estimators"] and reduced else {}
+        return _skeleton_settings(
+            opts["estimators"], opts["prescreen"], ksg_threads_divisor, device, pinned, per_target
+        )
 
     def map_threads(opts):
         return max(1, threads // 4) if "ksg" in opts["estimators"] else threads
@@ -448,7 +552,7 @@ def infer(
 
     pilot_skeletons = dict(thread_map(min(threads, len(pilot_targets)))(pilot_run, pilot_targets))
     member_seconds = {
-        name: float(np.mean([sk.timing.get(name, 0.0) for sk in pilot_skeletons.values()]))
+        name: float(np.mean([sk.timing[name] for sk in pilot_skeletons.values() if name in sk.timing] or [0.0]))
         for name in cheap["estimators"]
     }
     if "ksg" in estimators and "ksg" not in cheap["estimators"]:
@@ -467,6 +571,7 @@ def infer(
         edge_roles(discrete, pilot_skeletons, embeddings, pilot_settings, prng=0)
     interpret_seconds = (time.perf_counter() - start) / len(pilot_targets)
     pilot = {
+        "usage": {"gaussian": 1.0 - len(nonlinear) / len(targets)} if targets else {},
         "targets": pilot_targets,
         "interpret_seconds": interpret_seconds,
         "member_seconds": member_seconds,
