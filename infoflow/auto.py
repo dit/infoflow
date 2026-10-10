@@ -389,7 +389,7 @@ def _fit_budget(options, pilot, n_targets, threads, budget, pinned):
             options[key] = False
         before, predicted = predicted, _predict(options, pilot, n_targets, threads)
         downgrades.append(
-            f"dropped {label}: predicted {timedelta(seconds=round(before))} > budget "
+            f"dropped {label}: predicted {timedelta(seconds=round(before))} > remaining budget "
             f"{timedelta(seconds=round(budget))}, now {timedelta(seconds=round(predicted))}"
         )
     return options, downgrades, predicted
@@ -580,9 +580,14 @@ def infer(
         "shared_per_target": shared,
         "edge_seconds": _edge_seconds(discrete, pilot_skeletons, n_resamples),
     }
-    final, report.downgrades, report.predicted_seconds = _fit_budget(
-        options, pilot, len(targets), map_threads(options), budget, pinned_skeleton | pinned_infer
+    # Preprocessing, the linearity test, and the pilot are already spent.
+    elapsed = time.perf_counter() - started
+    remaining = None if budget is None else max(0.0, budget - elapsed)
+    final, report.downgrades, predicted = _fit_budget(
+        options, pilot, len(targets), map_threads(options), remaining, pinned_skeleton | pinned_infer
     )
+    report.predicted_seconds = elapsed + predicted
+    pilot["elapsed_before_run"] = elapsed
     report.pilot = pilot
     if budget is not None and report.predicted_seconds > budget:
         message = (
