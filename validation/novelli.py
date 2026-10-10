@@ -7,12 +7,47 @@ Example::
 """
 
 import argparse
+import threading
+import time
+from datetime import timedelta
 
 import numpy as np
 
 from infoflow.benchmarks import network_validation
 from infoflow.parallel import thread_map
 from infoflow.selection import SkeletonSettings
+
+
+def progress_map(base):
+    """
+    Wrap a ``map_fn`` so every finished target or edge prints a progress line with a
+    linear estimate of the time left in that phase.
+    """
+
+    def map_fn(fn, iterable):
+        items = list(iterable)
+        if not items:
+            return base(fn, items)
+        phase = "targets" if isinstance(items[0][0], (int, np.integer)) else "edges"
+        lock, done, start = threading.Lock(), [0], time.monotonic()
+        print(f"[{time.strftime('%H:%M:%S')}] {phase}: 0/{len(items)} started", flush=True)
+
+        def tracked(item):
+            result = fn(item)
+            with lock:
+                done[0] += 1
+                elapsed = time.monotonic() - start
+                left = elapsed / done[0] * (len(items) - done[0])
+                print(
+                    f"[{time.strftime('%H:%M:%S')}] {phase}: {done[0]}/{len(items)} done, "
+                    f"elapsed {timedelta(seconds=round(elapsed))}, ~{timedelta(seconds=round(left))} left",
+                    flush=True,
+                )
+            return result
+
+        return base(tracked, items)
+
+    return map_fn
 
 
 def main():
@@ -58,7 +93,7 @@ def main():
         infer_kwargs={
             "include_shared_candidates": not args.no_shared,
             "skeleton_settings": settings,
-            "map_fn": thread_map(args.threads),
+            "map_fn": progress_map(thread_map(args.threads)),
             "device": args.device,
         },
         prng=args.seed,
