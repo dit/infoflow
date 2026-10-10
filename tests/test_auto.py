@@ -100,4 +100,5 @@ def test_ensemble_runs_every_stage():
     assert sk.parents() and set(sk.parents()) <= set(graph.predecessors(target))
     assert set(sk.admitted_by) == set(sk.sources)
     assert set(sk.admitted_by.values()) <= {"gaussian", "coarse"}
+    assert set(sk.timing) == {"gaussian", "coarse"} and all(t > 0 for t in sk.timing.values())
     assert all(0.0 <= c["pvalue"] <= 1.0 for c in sk.tdmi_candidates.values())

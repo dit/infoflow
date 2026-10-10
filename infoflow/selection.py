@@ -26,6 +26,7 @@ realizations, so candidate sets are compared on the same samples.
 """
 
 import os
+import time
 from dataclasses import dataclass, field
 from itertools import combinations
 from math import factorial
@@ -185,6 +186,7 @@ class TargetSkeleton:
     tdmi_candidates: dict = field(default_factory=dict)
     n_samples: int = 0
     admitted_by: dict = field(default_factory=dict)
+    timing: dict = field(default_factory=dict)
 
     def parents(self):
         """
@@ -1156,7 +1158,8 @@ class _EnsembleStages:
     whichever estimator detects a candidate. All estimators see the same realizations
     and the same conditioning sets; each greedy step admits the candidate of the
     estimator with the smallest p-value. Pruning tests each selected source on its
-    own (given the others) instead of by the minimum statistic.
+    own (given the others) instead of by the minimum statistic. Time spent per
+    estimator is accumulated in :attr:`timing`.
     """
 
     def __init__(self, members, settings):
@@ -1164,6 +1167,7 @@ class _EnsembleStages:
         self.k = len(members)
         self.settings = settings
         self.admitted = {}
+        self.timing = {m.name: 0.0 for m in members}
 
     @property
     def n(self):
@@ -1172,19 +1176,19 @@ class _EnsembleStages:
     def _combine(self, p):
         return min(1.0, self.k * p)
 
+    def _timed(self, m, fn, *args):
+        start = time.perf_counter()
+        try:
+            return fn(*args)
+        finally:
+            self.timing[m.name] += time.perf_counter() - start
+
     def _max(self, candidates, cond, n_perm, alpha, screened=(), batch=None):
         best = None
         for m in self.members:
-            v, value, p = _max_statistic(
-                m.cols,
-                candidates,
-                cond,
-                n_perm,
-                m.perm,
-                m.deb,
-                alpha / self.k,
-                m.bt if batch is None else batch,
-                screened,
+            batch_m = m.bt if batch is None else batch
+            v, value, p = self._timed(
+                m, _max_statistic, m.cols, candidates, cond, n_perm, m.perm, m.deb, alpha / self.k, batch_m, screened
             )
             if best is None or p < best[2]:
                 best = (v, value, p, m.name)
@@ -1211,7 +1215,7 @@ class _EnsembleStages:
         s = self.settings
         best = None
         for m in self.members:
-            pair, p = _pair_test(m.cols, pool, cond, s, m.perm, m.bt, s.alpha_pairs / self.k)
+            pair, p = self._timed(m, _pair_test, m.cols, pool, cond, s, m.perm, m.bt, s.alpha_pairs / self.k)
             if pair is not None and (best is None or p < best[1]):
                 best = (pair, p, m.name)
         if best is None or self._combine(best[1]) > s.alpha_pairs:
@@ -1219,18 +1223,21 @@ class _EnsembleStages:
         self.admitted.update(dict.fromkeys(best[0], best[2]))
         return best[0]
 
+    def _member_individual_pvalue(self, m, sources, cond, v, n_perm, alpha):
+        others = [u for u in sources if u != v]
+        z, _ = m.cols.context(cond + others)
+        obs = _individual(m.cols, sources, cond, v)
+
+        def evaluate(idx):
+            return _individual(m.cols, sources, cond, v, idx)
+
+        null = _null_statistics(n_perm, lambda: m.perm(z), evaluate, obs, alpha / self.k, m.bt)
+        return _pvalue(null, obs)
+
     def _individual_pvalue(self, sources, cond, v, n_perm, alpha):
-        p = 1.0
-        for m in self.members:
-            others = [u for u in sources if u != v]
-            z, _ = m.cols.context(cond + others)
-            obs = _individual(m.cols, sources, cond, v)
-
-            def evaluate(idx, m=m):
-                return _individual(m.cols, sources, cond, v, idx)
-
-            null = _null_statistics(n_perm, lambda m=m, z=z: m.perm(z), evaluate, obs, alpha / self.k, m.bt)
-            p = min(p, _pvalue(null, obs))
+        p = min(
+            self._timed(m, self._member_individual_pvalue, m, sources, cond, v, n_perm, alpha) for m in self.members
+        )
         return self._combine(p)
 
     def prune(self, sources, cond):
@@ -1247,7 +1254,7 @@ class _EnsembleStages:
     def omnibus(self, sources, cond):
         best = None
         for m in self.members:
-            te, p = m.omnibus(sources, cond, self.settings.alpha_omnibus / self.k)
+            te, p = self._timed(m, m.omnibus, sources, cond, self.settings.alpha_omnibus / self.k)
             if best is None or p < best[1]:
                 best = (te, p)
         assert best is not None
@@ -1255,7 +1262,7 @@ class _EnsembleStages:
 
     def sequential(self, sources, cond):
         alpha = self.settings.alpha_max_seq / self.k
-        per = [m.sequential(sources, cond, alpha) for m in self.members]
+        per = [self._timed(m, m.sequential, sources, cond, alpha) for m in self.members]
         return {v: self._combine(min(d[v] for d in per)) for v in sources}
 
     def tdmi(self, candidates):
@@ -1305,10 +1312,13 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         conditionals += [(p, 0) for p in sources if (p, 0) not in conditionals]
     everything = list(dict.fromkeys(target_cands + source_cands + conditionals))
     max_lag = max(v[1] for v in everything) if everything else 0
-    members = []
+    started = time.perf_counter()
+    members, built = [], {}
     for name in names:
+        t0 = time.perf_counter()
         cols = _make_columns(name, data, target, everything, max_lag, settings, rng)
         members.append(_SingleStages(name, cols, _make_perm(cols, settings, rng), settings))
+        built[name] = time.perf_counter() - t0
     stages = members[0] if len(members) == 1 else _EnsembleStages(members, settings)
     result = TargetSkeleton(target=target, conditionals=conditionals, n_samples=stages.n)
     if stages.n < 10:
@@ -1370,125 +1380,10 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
             cands = [v for v in all_source_cands if v[0] == p]
             best, value, pv = stages.tdmi(cands)
             result.tdmi_candidates[p] = {"variable": best, "tdmi": value, "pvalue": pv}
-    return result
-    perm = _permuter(cols, settings, rng)
-    if isinstance(cols, _KsgColumns) and settings.ksg_null == "local":
-        free, ksg = perm, cols
-
-        def perm(z=None):
-            return ksg.local_permutation(z, rng) if z is not None else free()
-
-    elif not isinstance(cols, _KsgColumns) and settings.null == "strata":
-        from .stats import _within_strata
-
-        free_perm = perm
-
-        def perm(z=None):
-            return _within_strata(np.arange(cols.n), z, rng) if z is not None else free_perm()
-
-        setattr(perm, "uses_condition", True)  # noqa: B010
-
-    deb = settings.statistic == "debiased"
-    curtail = settings.curtail if settings.curtail is not None else settings.estimator in ("ksg", "gaussian")
-    bt = settings.curtail_batch if curtail else None
-    past = _greedy(cols, target_cands, conditionals, settings.n_perm_max_stat, settings.alpha_max_stat, perm, deb, bt)
-    all_source_cands = list(source_cands)
-    if settings.prescreen_alpha is not None:
-        kept = []
-        for p in sources:
-            lags = [v for v in source_cands if v[0] == p]
-            _, _, pv = _max_statistic(
-                cols,
-                lags,
-                conditionals + past,
-                settings.n_perm_prescreen,
-                perm,
-                deb,
-                settings.prescreen_alpha,
-                settings.curtail_batch,
-            )
-            if pv <= settings.prescreen_alpha:
-                kept.append(p)
-        source_cands = [v for v in source_cands if v[0] in kept]
-        result.prescreened = kept
-    screened = [v for v in all_source_cands if v not in source_cands]
-    selected = []
-    remaining = list(source_cands)
-    for _ in range(4):
-        new = _greedy(
-            cols,
-            remaining,
-            conditionals + past + selected,
-            settings.n_perm_max_stat,
-            settings.alpha_max_stat,
-            perm,
-            deb,
-            bt,
-            screened,
-        )
-        selected += new
-        remaining = [v for v in remaining if v not in selected]
-        # The target's own past can act only jointly with a source (e.g.
-        # y_t = x_{t-1} xor y_{t-1}): re-test unselected target lags given the sources.
-        more = _greedy(
-            cols,
-            [v for v in target_cands if v not in past],
-            conditionals + past + selected,
-            settings.n_perm_max_stat,
-            settings.alpha_max_stat,
-            perm,
-            deb,
-            bt,
-        )
-        past += more
-        if more:
-            continue
-        if not settings.synergy_search:
-            break
-        pool = remaining + screened + [v for v in target_cands if v not in past]
-        if len(pool) < 2:
-            break
-        pair = _pair_search(cols, pool, conditionals + past + selected, settings, perm, bt)
-        if pair is None:
-            break
-        for v in pair:
-            (past if v[0] == target else selected).append(v)
-        result.pairs.append(pair)
-        remaining = [v for v in remaining if v not in pair]
-        screened = [v for v in screened if v not in pair]
-    base = conditionals + past
-
-    if selected:
-        selected = _prune(cols, selected, base, settings.n_perm_min_stat, settings.alpha_min_stat, perm, deb, bt)
-    result.target_past = past
-    result.sources = selected
-    if selected:
-        s, Ks = cols.joint(selected)
-        z, Kz = cols.context(base)
-        result.omnibus_te = cols.cmi(s, Ks, z, Kz)
-        null = _null_statistics(
-            settings.n_perm_omnibus,
-            lambda: perm(z),
-            lambda idx: cols.cmi_batch(s, Ks, z, Kz, idx),
-            result.omnibus_te,
-            settings.alpha_omnibus,
-            bt,
-        )
-        result.omnibus_pvalue = _pvalue(null, result.omnibus_te)
-        result.source_pvalues = _sequential(
-            cols, selected, base, settings.n_perm_max_seq, settings.alpha_max_seq, perm, deb, bt
-        )
-        result.sources = [v for v in selected if result.source_pvalues[v] <= settings.alpha_max_seq]
-        result.significant = result.omnibus_pvalue <= settings.alpha_omnibus and bool(result.sources)
-
-    if settings.tdmi_screen:
-        parents = {p for p, _ in result.sources}
-        for p in sources:
-            if p in parents:
-                continue
-            cands = [v for v in all_source_cands if v[0] == p]
-            best, value, pv = _max_statistic(cols, cands, [], settings.n_perm_tdmi, perm, deb, settings.alpha_tdmi, bt)
-            result.tdmi_candidates[p] = {"variable": best, "tdmi": value, "pvalue": pv}
+    if isinstance(stages, _EnsembleStages):
+        result.timing = {name: built[name] + stages.timing[name] for name in names}
+    else:
+        result.timing = {names[0]: time.perf_counter() - started}
     return result
 
 
