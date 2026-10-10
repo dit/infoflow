@@ -148,6 +148,9 @@ def test_predict_counts_rounds_of_parallel_work():
     layers = 5.0 * 13
     expected = selection + layers + 1.0 * 10 + auto._HYPEREDGE_FACTOR * layers
     assert auto._predict(OPTIONS, PILOT, 10, 4) == pytest.approx(expected)
+    # A pilot of 2 concurrent targets saturates the machine: 10 targets take 5 pilot times.
+    saturated = dict(PILOT, concurrency=2)
+    assert auto._predict(OPTIONS, saturated, 10, 4) == pytest.approx(expected + (5 - 3) * 1040.0)
 
 
 def test_fit_budget_downgrades_in_order():

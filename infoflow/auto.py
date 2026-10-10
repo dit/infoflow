@@ -331,14 +331,18 @@ def _predict(options, pilot, n_targets, threads):
     """
     Predicted seconds of a run with `options`, from the pilot's measurements.
 
-    Targets, and then edges, run `threads` at a time, so each phase takes as many
-    rounds of its per-item time as it has full or partial batches of items.
+    The pilot's per-target times were measured with its targets running together,
+    each using the cores the others left free; once more targets run than the pilot
+    had, they share the same cores, so selection takes the pilot's time for every
+    ``concurrency`` targets. Edges (measured one at a time, and mostly single-threaded)
+    run `threads` at a time, in as many rounds as they have full or partial batches.
     """
     usage = pilot.get("usage", {})
     per_target = sum(pilot["member_seconds"].get(name, 0.0) * usage.get(name, 1.0) for name in options["estimators"])
     if options["prescreen"] and not pilot["prescreen"]:
         per_target *= _PRESCREEN_FACTOR
-    selection = per_target * _rounds(n_targets, threads)
+    concurrency = max(1, pilot.get("concurrency", threads))
+    selection = per_target * max(_rounds(n_targets, threads), n_targets / concurrency)
     edges = pilot["parents_per_target"] * n_targets
     if options["include_shared_candidates"]:
         edges += pilot["shared_per_target"] * n_targets
@@ -571,6 +575,7 @@ def infer(
         edge_roles(discrete, pilot_skeletons, embeddings, pilot_settings, prng=0)
     interpret_seconds = (time.perf_counter() - start) / len(pilot_targets)
     pilot = {
+        "concurrency": min(threads, len(pilot_targets)),
         "usage": {"gaussian": 1.0 - len(nonlinear) / len(targets)} if targets else {},
         "targets": pilot_targets,
         "interpret_seconds": interpret_seconds,
