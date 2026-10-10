@@ -63,47 +63,70 @@ Large networks
 --------------
 
 At the scale of :cite:`Novelli2019` (100 nodes, up to 10 000 samples; one network
-per configuration, significance 0.01, source pre-screening at 0.1;
-``validation/run_large.sh``):
+per configuration; significance 0.001 at every selection stage, as in
+:cite:`Novelli2019`; source pre-screening at 0.1 except for the Gaussian estimator;
+``validation/run_large.sh``, ``validation/run_large_gaussian.sh``,
+``validation/run_plugin_options.sh``; results in ``validation/results/alpha001/``).
+The last numeric column is precision / recall of the intrinsic layer:
 
-===================================  =====  =========  ======  ===========  =======
-Configuration                        T      Precision  Recall  Specificity  Runtime
-===================================  =====  =========  ======  ===========  =======
-VAR, plug-in                         1000   0.62       0.10    0.998        4 min
-VAR, plug-in                         3000   0.88       0.20    0.999        7 min
-VAR, plug-in                         10000  0.95       0.30    0.9995       16 min
-VAR, plug-in, strata + debiased      10000  0.89       0.50    0.998        39 min
-logistic maps, plug-in               1000   0.87       0.20    0.999        4 min
-logistic maps, plug-in               3000   0.99       0.43    0.9999       11 min
-logistic maps, plug-in               10000  0.95       0.59    0.999        31 min
-logistic maps, KSG (20 targets)      10000  0.98       1.00    0.9995       202 min
-VAR, Gaussian, no pre-screen         1000   0.93       0.56    0.999        11 min
-VAR, Gaussian, no pre-screen         3000   0.96       0.85    0.999        29 min
-VAR, Gaussian, no pre-screen         10000  0.94       1.00    0.998        122 min
-logistic maps, Gaussian, no pre-sc.  10000  0.93       0.64    0.999        25 min
-===================================  =====  =========  ======  ===========  =======
+===============================  =====  =========  ======  ===========  ===========  =======
+Configuration                    T      Precision  Recall  Specificity  Intrinsic    Runtime
+===============================  =====  =========  ======  ===========  ===========  =======
+VAR, plug-in                     1000   0.93       0.05    0.9999       0.93 / 0.04  9 min
+VAR, plug-in                     3000   1.00       0.11    1.0000       1.00 / 0.11  17 min
+VAR, plug-in                     10000  1.00       0.28    1.0000       1.00 / 0.23  47 min
+VAR, plug-in, strata + debiased  10000  0.98       0.41    0.9998       1.00 / 0.32  62 min
+VAR, trend                       1000   1.00       0.34    1.0000       1.00 / 0.31  17 min
+VAR, trend                       3000   0.98       0.73    0.9996       0.99 / 0.59  62 min
+VAR, trend                       10000  0.99       0.98    0.9998       0.99 / 0.95  9.6 h
+VAR, coarse                      1000   1.00       0.10    1.0000       1.00 / 0.10  10 min
+VAR, coarse                      3000   1.00       0.31    1.0000       1.00 / 0.26  25 min
+VAR, coarse                      10000  1.00       0.63    1.0000       1.00 / 0.47  62 min
+VAR, Gaussian                    1000   0.99       0.44    0.9999       0.99 / 0.35  15 min
+VAR, Gaussian                    3000   1.00       0.85    1.0000       1.00 / 0.75  53 min
+VAR, Gaussian                    10000  1.00       1.00    1.0000       1.00 / 0.99  3.3 h
+logistic maps, plug-in           1000   1.00       0.11    1.0000       1.00 / 0.10  10 min
+logistic maps, plug-in           3000   1.00       0.38    1.0000       1.00 / 0.23  28 min
+logistic maps, plug-in           10000  1.00       0.57    1.0000       1.00 / 0.51  96 min
+logistic maps, trend             10000  0.99       0.35    0.9999       1.00 / 0.30  110 min
+logistic maps, coarse            10000  1.00       0.96    0.9999       1.00 / 0.90  2.2 h
+logistic maps, Gaussian          10000  0.98       0.54    0.9997       0.99 / 0.53  61 min
+===============================  =====  =========  ======  ===========  ===========  =======
 
-The plug-in and KSG rows were run before the pre-screened-out sources were added to
-the max-statistic nulls, so their selections were somewhat anti-conservative (on the
-empty network, 37 false parents with plug-in). The Gaussian rows use the corrected
-selection without pre-screening, which for this estimator is also faster.
+On empty 100-node networks (10 000 samples) no estimator selected a single false
+parent. Precision is at or near 1 everywhere, as :cite:`Novelli2019` report for this
+level; what separates the estimators is recall, i.e. statistical power.
 
-The intrinsic layer is more precise still (0.92–1.00) at somewhat lower recall. On
-an empty 100-node network with 10 000 samples the false-positive rate was 0.4% for
-selected parents and 0.06% in the intrinsic layer; with the Gaussian estimator and
-no pre-screen it was 0.11% (11 links) and 0.03%.
+The plug-in CMI on symbols is weak on these networks because its test has
+:math:`(K_x - 1)(K_y - 1) K_z` degrees of freedom: with four symbols per variable and
+a one-variable context that is 36, against 1 for the linear-Gaussian estimator, while
+each VAR parent carries only about 0.02 bits. Each selected parent multiplies
+:math:`K_z` again. Two symbol estimators spend fewer degrees of freedom:
 
-With the KSG estimator on coupled logistic maps, every one of the 41 true links into
-the 20 sampled targets was recovered with one false link, matching the
-precision, recall, and specificity above 98% that :cite:`Novelli2019` report at this
-size and length; it costs about ten minutes per target. On the linear VAR networks
-the plug-in path stays conservative (recall 0.30, rising to 0.50 with the strata null
-at a small cost in precision), and KSG is not the remedy there: each parent explains
-only about 2% of its target's variance, which needs the efficiency of a parametric
-(linear-Gaussian) estimator, the one :cite:`Novelli2019` used for these networks.
-With ``estimator="gaussian"`` every true VAR link is recovered at 10 000 samples, with
-exact lags and precision 0.94 (0.98 in the intrinsic layer). :cite:`Novelli2019`
-report precision, recall, and specificity above 98% at this size and length, at the
-stricter level 0.001 (here 0.01, which trades some precision for recall). On the
-nonlinear logistic maps it misses about a third of the links, as a linear estimator
-should; KSG is the estimator for those.
+* ``estimator="trend"`` tests a stratified ordinal trend (one degree of freedom per
+  candidate). On the VAR networks it comes close to the Gaussian estimator (recall
+  0.98 at 10 000 samples, 0.73 at 3000) without leaving symbols, but it cannot see
+  non-monotone couplings and recovers only a third of the logistic-map links.
+* ``estimator="coarse"`` keeps the plug-in CMI on median-split candidates, with
+  context bins that shrink as the conditioning set grows. It improves on the
+  plug-in everywhere and is the strongest estimator here on the nonlinear logistic
+  maps (recall 0.96 against 0.57 for the plug-in and 0.54 for the Gaussian); a
+  median split cannot, however, see dependence confined to the tails of a source.
+
+The strata null with the debiased statistic helps the plug-in more modestly (recall
+0.28 to 0.41). The linear-Gaussian estimator, the one :cite:`Novelli2019` used for
+VAR networks, recovers every true link at 10 000 samples, with exact lags, and
+misses half the logistic-map links, as a linear estimator should.
+
+The trend, coarse, and plug-in runs also estimate layers for shared-only candidates
+(the Gaussian runs skip them with ``--no-shared``); these are not scored, but they
+dominate some runtimes (the 9.6 h trend run), so runtimes compare only roughly.
+
+KSG at this level was not run to completion. Sources removed by the pre-screen still
+enter every max-statistic null (otherwise the screen's selection makes the test
+anti-conservative), so each admitted parent needs 2000 permutations of KSG
+estimates over nearly all of the 495 candidate variables, more than 13 hours per
+target on one machine. An earlier run at significance 0.01, before that correction
+and with the pair search at 0.05, recovered every one of the 41 true links into 20
+sampled logistic-map targets with one false link (precision 0.98, recall 1.00) in
+202 minutes.
