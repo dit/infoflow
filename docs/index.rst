@@ -27,6 +27,7 @@ and false-discovery-rate control.
    :maxdepth: 2
 
    quickstart
+   auto
    layers
    preprocessing
    skeleton

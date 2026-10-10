@@ -5,6 +5,7 @@ Network inference
 -----------------
 
 .. automodule:: infoflow.network
+.. automodule:: infoflow.auto
 
 Data
 ----

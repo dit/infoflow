@@ -6,7 +6,8 @@ Install from the repository (``infoflow`` builds on the inference tools in
 
     pip install "infoflow @ git+https://github.com/dit/infoflow"
 
-Infer a network from a (time, process) array, or a list of such arrays (trials):
+Infer a network from a (time, process) array, or a list of such arrays (trials),
+with every method chosen automatically (:doc:`auto`):
 
 .. code-block:: python
 
@@ -14,6 +15,14 @@ Infer a network from a (time, process) array, or a list of such arrays (trials):
     from infoflow import datasets
 
     data = datasets.common_driver(4000, seed=0)  # columns (x, y, z); z drives x and y
+    result = infoflow.infer(data, names=["X", "Y", "Z"], prng=0)
+    print(result.report)  # the estimators, options, and timings it chose, and why
+    net = result.network
+
+To set every option yourself, call :func:`infoflow.infer_multiplex` directly:
+
+.. code-block:: python
+
     net = infoflow.infer_multiplex(data, names=["X", "Y", "Z"], prng=0)
     print(net.summary())
     # Z -> X and Z -> Y are intrinsic; X -> Y appears only as shared flow.
