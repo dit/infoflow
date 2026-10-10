@@ -82,6 +82,14 @@ class SkeletonSettings:
     binary candidates and context bins that shrink with the conditioning set (about
     ``coarse_min_cell`` samples per cell), trading resolution for degrees of freedom.
 
+    A tuple of estimators, e.g. ``("gaussian", "trend", "coarse")``, runs them together:
+    every test is done by each estimator at level :math:`\\alpha / k` and its p-value is
+    :math:`\\min(1, k \\min_e p_e)`, a union (Bonferroni) bound :cite:`Dunn1961`, so each
+    stage keeps its error rate whichever estimator detects a candidate. Recall is then
+    close to the best member's on every kind of coupling. The permutation counts must
+    reach :math:`\\alpha / k`. ``TargetSkeleton.admitted_by`` records which estimator
+    admitted each source.
+
     ``curtail`` (default: on for KSG and Gaussian) evaluates permutations ``curtail_batch`` at a time
     and stops a test as soon as its p-value must exceed the stage's level, which leaves
     every decision unchanged and saves most permutations in the many tests that fail.
@@ -120,7 +128,7 @@ class SkeletonSettings:
     alpha_tdmi: float = 0.05
     fdr: bool = True
     fdr_constant: int = 1
-    estimator: str = "plugin"
+    estimator: str | tuple = "plugin"
     null: str = "free"
     statistic: str = "raw"
     adaptive_target_bins: int = 6
@@ -137,16 +145,19 @@ class SkeletonSettings:
     device: str | None = None
 
     def check(self):
+        names = (self.estimator,) if isinstance(self.estimator, str) else tuple(self.estimator)
+        valid = ("plugin", "ksg", "adaptive", "gaussian", "trend", "coarse")
+        if not names or any(n not in valid for n in names) or len(set(names)) != len(names):
+            raise ValueError(f"estimator must be one of {valid}, or a tuple of distinct ones")
+        k = len(names)
         for name in ("max_stat", "min_stat", "omnibus", "max_seq"):
-            check_n_perm(getattr(self, f"n_perm_{name}"), getattr(self, f"alpha_{name}"))
+            check_n_perm(getattr(self, f"n_perm_{name}"), getattr(self, f"alpha_{name}") / k)
         if self.synergy_search:
-            check_n_perm(self.n_perm_pairs, self.alpha_pairs)
+            check_n_perm(self.n_perm_pairs, self.alpha_pairs / k)
         if self.tdmi_screen:
-            check_n_perm(self.n_perm_tdmi, self.alpha_tdmi)
+            check_n_perm(self.n_perm_tdmi, self.alpha_tdmi / k)
         if self.ksg_null not in ("permutation", "local"):
             raise ValueError("ksg_null must be 'permutation' or 'local'")
-        if self.estimator not in ("plugin", "ksg", "adaptive", "gaussian", "trend", "coarse"):
-            raise ValueError("estimator must be 'plugin', 'ksg', 'adaptive', 'gaussian', 'trend', or 'coarse'")
         if self.null not in ("free", "strata"):
             raise ValueError("null must be 'free' or 'strata'")
         if self.statistic not in ("raw", "debiased"):
@@ -173,6 +184,7 @@ class TargetSkeleton:
     pairs: list = field(default_factory=list)
     tdmi_candidates: dict = field(default_factory=dict)
     n_samples: int = 0
+    admitted_by: dict = field(default_factory=dict)
 
     def parents(self):
         """
@@ -885,11 +897,21 @@ def _pair_search(cols, candidates, cond, settings, perm, batch=None):
     """
     The best pair of candidates (by joint CMI) if it passes a max statistic over pairs.
     """
+    pair, p = _pair_test(cols, candidates, cond, settings, perm, batch)
+    return pair if pair is not None and p <= settings.alpha_pairs else None
+
+
+def _pair_test(cols, candidates, cond, settings, perm, batch=None, alpha=None):
+    """
+    The best pair of candidates and its max-statistic p-value (curtailed at `alpha`,
+    default ``settings.alpha_pairs``), or ``(None, 1.0)`` without pairs.
+    """
+    alpha = settings.alpha_pairs if alpha is None else alpha
     debiased = settings.statistic == "debiased"
     pool = sorted(candidates, key=lambda v: (v[1], v[0]))[: settings.max_pair_candidates]
     pairs = [(a, b) for a, b in combinations(pool, 2) if a[0] != b[0] or a[1] != b[1]]
     if not pairs:
-        return None
+        return None, 1.0
     z, Kz = cols.context(cond)
     codes = [cols.joint([a, b]) for a, b in pairs]
     obs = np.array(list(cols.map(lambda code: cols.cmi(code[0], code[1], z, Kz), codes)))
@@ -907,10 +929,8 @@ def _pair_search(cols, candidates, cond, settings, perm, batch=None):
         def evaluate(idx):
             return np.max([cols.cmi_batch(c, K, z, Kz, idx) for c, K in codes], axis=0)
 
-        null = _null_statistics(settings.n_perm_pairs, lambda: perm(z), evaluate, observed, settings.alpha_pairs, batch)
-    if _pvalue(null, observed) <= settings.alpha_pairs:
-        return pairs[best]
-    return None
+        null = _null_statistics(settings.n_perm_pairs, lambda: perm(z), evaluate, observed, alpha, batch)
+    return pairs[best], _pvalue(null, observed)
 
 
 def _individual(cols, variables, cond, v, idx=None, perm=None, n_perm=0):
@@ -1012,6 +1032,237 @@ def _source_lags(data, embeddings, process, max_lag):
     return replace(embedding, max_lag=max(max_lag, embedding.max_lag)).lags(int(data.lag_step[process]))
 
 
+def _estimators(settings):
+    """
+    The selection estimator names of `settings`, as a tuple.
+    """
+    e = settings.estimator
+    return (e,) if isinstance(e, str) else tuple(e)
+
+
+def _make_columns(name, data, target, everything, max_lag, settings, rng):
+    if name == "ksg":
+        cols = _KsgColumns(data, target, everything, max_lag, k=settings.ksg_k, threads=settings.ksg_threads, prng=rng)
+    elif name == "gaussian":
+        cols = _GaussianColumns(data, target, everything, max_lag)
+    elif name == "adaptive":
+        cols = _AdaptiveColumns(
+            data, target, everything, max_lag, settings.adaptive_target_bins, settings.adaptive_candidate_bins
+        )
+    elif name == "trend":
+        cols = _TrendColumns(data, target, everything, max_lag, settings.trend_bins)
+    elif name == "coarse":
+        cols = _CoarseColumns(data, target, everything, max_lag, min_cell=settings.coarse_min_cell)
+    else:
+        cols = _Columns(data, target, everything, max_lag)
+    if settings.device is not None:
+        from .backend import resolve_device
+
+        cols.device = resolve_device(settings.device)
+    return cols
+
+
+def _make_perm(cols, settings, rng):
+    perm = _permuter(cols, settings, rng)
+    if isinstance(cols, _KsgColumns) and settings.ksg_null == "local":
+        free, ksg = perm, cols
+
+        def perm(z=None):
+            return ksg.local_permutation(z, rng) if z is not None else free()
+
+    elif not isinstance(cols, _KsgColumns) and settings.null == "strata":
+        from .stats import _within_strata
+
+        free_perm = perm
+
+        def perm(z=None):
+            return _within_strata(np.arange(cols.n), z, rng) if z is not None else free_perm()
+
+        setattr(perm, "uses_condition", True)  # noqa: B010
+    return perm
+
+
+class _SingleStages:
+    """
+    The selection tests of one estimator (the IDTxl procedure, unchanged).
+    """
+
+    def __init__(self, name, cols, perm, settings):
+        self.name = name
+        self.cols = cols
+        self.perm = perm
+        self.settings = settings
+        self.deb = settings.statistic == "debiased"
+        curtail = settings.curtail if settings.curtail is not None else name in ("ksg", "gaussian")
+        self.bt = settings.curtail_batch if curtail else None
+        self.admitted = {}
+
+    @property
+    def n(self):
+        return self.cols.n
+
+    def greedy(self, candidates, cond, screened=()):
+        s = self.settings
+        new = _greedy(
+            self.cols, candidates, cond, s.n_perm_max_stat, s.alpha_max_stat, self.perm, self.deb, self.bt, screened
+        )
+        self.admitted.update(dict.fromkeys(new, self.name))
+        return new
+
+    def prescreen_pvalue(self, lags, cond):
+        s = self.settings
+        return _max_statistic(
+            self.cols, lags, cond, s.n_perm_prescreen, self.perm, self.deb, s.prescreen_alpha, s.curtail_batch
+        )[2]
+
+    def pair(self, pool, cond):
+        pair = _pair_search(self.cols, pool, cond, self.settings, self.perm, self.bt)
+        if pair is not None:
+            self.admitted.update(dict.fromkeys(pair, self.name))
+        return pair
+
+    def prune(self, sources, cond):
+        s = self.settings
+        return _prune(self.cols, sources, cond, s.n_perm_min_stat, s.alpha_min_stat, self.perm, self.deb, self.bt)
+
+    def omnibus(self, sources, cond, alpha=None):
+        s = self.settings
+        alpha = s.alpha_omnibus if alpha is None else alpha
+        cols, perm = self.cols, self.perm
+        x, Kx = cols.joint(sources)
+        z, Kz = cols.context(cond)
+        te = cols.cmi(x, Kx, z, Kz)
+        null = _null_statistics(
+            s.n_perm_omnibus, lambda: perm(z), lambda idx: cols.cmi_batch(x, Kx, z, Kz, idx), te, alpha, self.bt
+        )
+        return te, _pvalue(null, te)
+
+    def sequential(self, sources, cond, alpha=None):
+        s = self.settings
+        alpha = s.alpha_max_seq if alpha is None else alpha
+        return _sequential(self.cols, sources, cond, s.n_perm_max_seq, alpha, self.perm, self.deb, self.bt)
+
+    def tdmi(self, candidates):
+        s = self.settings
+        return _max_statistic(self.cols, candidates, [], s.n_perm_tdmi, self.perm, self.deb, s.alpha_tdmi, self.bt)
+
+
+class _EnsembleStages:
+    """
+    The selection tests of several estimators combined by a union bound.
+
+    Every test is run once per estimator at level :math:`\\alpha / k` and its p-value is
+    :math:`\\min(1, k \\min_e p_e)` (Bonferroni), so each stage keeps its error rate
+    whichever estimator detects a candidate. All estimators see the same realizations
+    and the same conditioning sets; each greedy step admits the candidate of the
+    estimator with the smallest p-value. Pruning tests each selected source on its
+    own (given the others) instead of by the minimum statistic.
+    """
+
+    def __init__(self, members, settings):
+        self.members = members
+        self.k = len(members)
+        self.settings = settings
+        self.admitted = {}
+
+    @property
+    def n(self):
+        return self.members[0].cols.n
+
+    def _combine(self, p):
+        return min(1.0, self.k * p)
+
+    def _max(self, candidates, cond, n_perm, alpha, screened=(), batch=None):
+        best = None
+        for m in self.members:
+            v, value, p = _max_statistic(
+                m.cols,
+                candidates,
+                cond,
+                n_perm,
+                m.perm,
+                m.deb,
+                alpha / self.k,
+                m.bt if batch is None else batch,
+                screened,
+            )
+            if best is None or p < best[2]:
+                best = (v, value, p, m.name)
+        assert best is not None
+        return best[0], best[1], self._combine(best[2]), best[3]
+
+    def greedy(self, candidates, cond, screened=()):
+        s = self.settings
+        selected, candidates = [], list(candidates)
+        while candidates:
+            v, _, p, name = self._max(candidates, cond + selected, s.n_perm_max_stat, s.alpha_max_stat, screened)
+            if p > s.alpha_max_stat:
+                break
+            selected.append(v)
+            candidates.remove(v)
+            self.admitted[v] = name
+        return selected
+
+    def prescreen_pvalue(self, lags, cond):
+        s = self.settings
+        return self._max(lags, cond, s.n_perm_prescreen, s.prescreen_alpha, batch=s.curtail_batch)[2]
+
+    def pair(self, pool, cond):
+        s = self.settings
+        best = None
+        for m in self.members:
+            pair, p = _pair_test(m.cols, pool, cond, s, m.perm, m.bt, s.alpha_pairs / self.k)
+            if pair is not None and (best is None or p < best[1]):
+                best = (pair, p, m.name)
+        if best is None or self._combine(best[1]) > s.alpha_pairs:
+            return None
+        self.admitted.update(dict.fromkeys(best[0], best[2]))
+        return best[0]
+
+    def _individual_pvalue(self, sources, cond, v, n_perm, alpha):
+        p = 1.0
+        for m in self.members:
+            others = [u for u in sources if u != v]
+            z, _ = m.cols.context(cond + others)
+            obs = _individual(m.cols, sources, cond, v)
+
+            def evaluate(idx, m=m):
+                return _individual(m.cols, sources, cond, v, idx)
+
+            null = _null_statistics(n_perm, lambda m=m, z=z: m.perm(z), evaluate, obs, alpha / self.k, m.bt)
+            p = min(p, _pvalue(null, obs))
+        return self._combine(p)
+
+    def prune(self, sources, cond):
+        s = self.settings
+        sources = list(sources)
+        while sources:
+            pv = {v: self._individual_pvalue(sources, cond, v, s.n_perm_min_stat, s.alpha_min_stat) for v in sources}
+            worst = max(sources, key=lambda v: pv[v])
+            if pv[worst] <= s.alpha_min_stat:
+                break
+            sources.remove(worst)
+        return sources
+
+    def omnibus(self, sources, cond):
+        best = None
+        for m in self.members:
+            te, p = m.omnibus(sources, cond, self.settings.alpha_omnibus / self.k)
+            if best is None or p < best[1]:
+                best = (te, p)
+        assert best is not None
+        return best[0], self._combine(best[1])
+
+    def sequential(self, sources, cond):
+        alpha = self.settings.alpha_max_seq / self.k
+        per = [m.sequential(sources, cond, alpha) for m in self.members]
+        return {v: self._combine(min(d[v] for d in per)) for v in sources}
+
+    def tdmi(self, candidates):
+        s = self.settings
+        return self._max(candidates, [], s.n_perm_tdmi, s.alpha_tdmi)[:3]
+
+
 def select_parents(data, target, embeddings=None, sources=None, settings=None, prng=None):
     """
     Select the target's past and its source parents.
@@ -1041,7 +1292,8 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     # max_source_lag (IDTxl's max_lag_sources; default the larger of 5 and the largest
     # lag budget in the network), on each source's own grid.
     source_max = settings.max_source_lag or max(5, _max_budget(embeddings, P))
-    if settings.estimator in ("ksg", "gaussian"):
+    names = _estimators(settings)
+    if any(name in ("ksg", "gaussian") for name in names):
         # KSG resolves the target's own past finely enough that memory beyond the symbolic
         # lag budget matters; offer the target the source lag range (IDTxl's max_lag_target).
         target_cands = [(target, lag) for lag in _source_lags(data, embeddings, target, source_max)]
@@ -1053,27 +1305,72 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         conditionals += [(p, 0) for p in sources if (p, 0) not in conditionals]
     everything = list(dict.fromkeys(target_cands + source_cands + conditionals))
     max_lag = max(v[1] for v in everything) if everything else 0
-    if settings.estimator == "ksg":
-        cols = _KsgColumns(data, target, everything, max_lag, k=settings.ksg_k, threads=settings.ksg_threads, prng=rng)
-    elif settings.estimator == "gaussian":
-        cols = _GaussianColumns(data, target, everything, max_lag)
-    elif settings.estimator == "adaptive":
-        cols = _AdaptiveColumns(
-            data, target, everything, max_lag, settings.adaptive_target_bins, settings.adaptive_candidate_bins
-        )
-    elif settings.estimator == "trend":
-        cols = _TrendColumns(data, target, everything, max_lag, settings.trend_bins)
-    elif settings.estimator == "coarse":
-        cols = _CoarseColumns(data, target, everything, max_lag, min_cell=settings.coarse_min_cell)
-    else:
-        cols = _Columns(data, target, everything, max_lag)
-    if settings.device is not None:
-        from .backend import resolve_device
-
-        cols.device = resolve_device(settings.device)
-    result = TargetSkeleton(target=target, conditionals=conditionals, n_samples=cols.n)
-    if cols.n < 10:
+    members = []
+    for name in names:
+        cols = _make_columns(name, data, target, everything, max_lag, settings, rng)
+        members.append(_SingleStages(name, cols, _make_perm(cols, settings, rng), settings))
+    stages = members[0] if len(members) == 1 else _EnsembleStages(members, settings)
+    result = TargetSkeleton(target=target, conditionals=conditionals, n_samples=stages.n)
+    if stages.n < 10:
         return result
+    past = stages.greedy(target_cands, conditionals)
+    all_source_cands = list(source_cands)
+    if settings.prescreen_alpha is not None:
+        kept = []
+        for p in sources:
+            lags = [v for v in source_cands if v[0] == p]
+            if stages.prescreen_pvalue(lags, conditionals + past) <= settings.prescreen_alpha:
+                kept.append(p)
+        source_cands = [v for v in source_cands if v[0] in kept]
+        result.prescreened = kept
+    screened = [v for v in all_source_cands if v not in source_cands]
+    selected = []
+    remaining = list(source_cands)
+    for _ in range(4):
+        new = stages.greedy(remaining, conditionals + past + selected, screened)
+        selected += new
+        remaining = [v for v in remaining if v not in selected]
+        # The target's own past can act only jointly with a source (e.g.
+        # y_t = x_{t-1} xor y_{t-1}): re-test unselected target lags given the sources.
+        more = stages.greedy([v for v in target_cands if v not in past], conditionals + past + selected)
+        past += more
+        if more:
+            continue
+        if not settings.synergy_search:
+            break
+        pool = remaining + screened + [v for v in target_cands if v not in past]
+        if len(pool) < 2:
+            break
+        pair = stages.pair(pool, conditionals + past + selected)
+        if pair is None:
+            break
+        for v in pair:
+            (past if v[0] == target else selected).append(v)
+        result.pairs.append(pair)
+        remaining = [v for v in remaining if v not in pair]
+        screened = [v for v in screened if v not in pair]
+    base = conditionals + past
+
+    if selected:
+        selected = stages.prune(selected, base)
+    result.target_past = past
+    result.sources = selected
+    if selected:
+        result.omnibus_te, result.omnibus_pvalue = stages.omnibus(selected, base)
+        result.source_pvalues = stages.sequential(selected, base)
+        result.sources = [v for v in selected if result.source_pvalues[v] <= settings.alpha_max_seq]
+        result.significant = result.omnibus_pvalue <= settings.alpha_omnibus and bool(result.sources)
+    result.admitted_by = {v: stages.admitted[v] for v in result.sources if v in stages.admitted}
+
+    if settings.tdmi_screen:
+        parents = {p for p, _ in result.sources}
+        for p in sources:
+            if p in parents:
+                continue
+            cands = [v for v in all_source_cands if v[0] == p]
+            best, value, pv = stages.tdmi(cands)
+            result.tdmi_candidates[p] = {"variable": best, "tdmi": value, "pvalue": pv}
+    return result
     perm = _permuter(cols, settings, rng)
     if isinstance(cols, _KsgColumns) and settings.ksg_null == "local":
         free, ksg = perm, cols
