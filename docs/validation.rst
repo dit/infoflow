@@ -113,6 +113,13 @@ each VAR parent carries only about 0.02 bits. Each selected parent multiplies
   maps (recall 0.96 against 0.57 for the plug-in and 0.54 for the Gaussian); a
   median split cannot, however, see dependence confined to the tails of a source.
 
+These networks reward the two estimators: couplings are weak, linear or (for the
+logistic maps) through a weighted sum, and no node is a strong nonlinear driver of
+several others. On the MuTE network, whose root drives two children nonlinearly,
+both condition too coarsely and link the children to each other and to the root
+(precision 0.38 for trend and 0.36 for coarse; see :doc:`auto`), so
+:func:`~infoflow.infer` does not use them.
+
 The strata null with the debiased statistic helps the plug-in more modestly (recall
 0.28 to 0.41). The linear-Gaussian estimator, the one :cite:`Novelli2019` used for
 VAR networks, recovers every true link at 10 000 samples, with exact lags, and

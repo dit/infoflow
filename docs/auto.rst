@@ -91,3 +91,57 @@ The stratified-trend and coarse-symbol estimators are not in the presets: they
 condition on coarse cells, and the information left inside a cell creates false
 links on the same MuTE network whether or not the target is linear (precision 0.38
 and 0.36). They remain available as ``estimator="trend"`` / ``"coarse"``.
+
+Validation
+----------
+
+Every arm runs through :func:`~infoflow.infer` with the balanced preset (so all share
+the 0.001 level, pre-screen, lag bound 5, and layer settings); ``infer`` is the
+ensemble, the others pin one estimator. The 100-node networks are those of
+:doc:`validation`, scored on 20 sampled targets; interpretation and the node layer
+are off (they do not change these levels). ``validation/run_auto.sh``, results in
+``validation/results/auto/``. Precision / recall of the selected parents, and of the
+intrinsic layer:
+
+========================  ===========  =========  ======  =====  ===========  =======
+Scenario                  Arm          Precision  Recall  Links  Intrinsic    Runtime
+========================  ===========  =========  ======  =====  ===========  =======
+VAR, T = 3000             **infer**    1.00       0.80    53     1.00 / 0.73  15 min
+\                         plug-in      1.00       0.06    4      1.00 / 0.06  3 min
+\                         Gaussian     1.00       0.86    57     1.00 / 0.77  8 min
+VAR, T = 10000            **infer**    1.00       1.00    60     1.00 / 1.00  60 min
+\                         plug-in      1.00       0.35    21     1.00 / 0.30  13 min
+\                         Gaussian     1.00       1.00    60     1.00 / 1.00  22 min
+logistic maps, T = 10000  **infer**    1.00       0.80    33     1.00 / 0.78  41 min
+\                         plug-in      1.00       0.80    33     1.00 / 0.78  24 min
+\                         Gaussian     1.00       0.78    32     1.00 / 0.76  7 min
+empty, T = 10000          all arms     no links                               1-3 min
+MuTE, T = 3000            **infer**    1.00       0.80    4      1.00 / 0.80  1 min
+\                         plug-in      1.00       0.80    4      1.00 / 0.80  < 1 min
+\                         Gaussian     0.60       0.60    5      0.75 / 0.60  2 min
+\                         trend        0.38       0.60    8      0.00 / 0.00  1 min
+\                         coarse       0.36       0.80    11     0.44 / 0.80  4 min
+orthogonal features       **infer**    1.00       1.00    2      1.00 / 1.00  < 1 min
+\                         plug-in      1.00       1.00    2      1.00 / 1.00  < 1 min
+\                         Gaussian     1.00       0.50    1      1.00 / 0.50  < 1 min
+\                         trend        1.00       0.50    1      1.00 / 0.50  < 1 min
+\                         coarse       1.00       0.50    1      1.00 / 0.50  < 1 min
+XOR, common driver,       **infer**    1.00       1.00    2      (see note)   < 1 min
+chain (discrete)
+========================  ===========  =========  ======  =====  ===========  =======
+
+``infer`` kept precision 1.00 in every scenario and selected nothing on the empty
+network, while recovering at least 93% of the best single estimator's recall
+everywhere: the Gaussian estimator's on the linear networks (13 times the plug-in's
+recall at 3000 samples), the plug-in's on the nonlinear ones, where the gate turned
+the Gaussian estimator off for every logistic-map target and for MuTE's two
+nonlinear targets. The small loss at 3000 samples (0.80 against 0.86) is the price of
+splitting the level two ways and of the few linear targets the gate turns off by
+mistake. On the orthogonal-features process only the plug-in sees ``x2``'s
+dependence on whether ``|x0|`` exceeds a quartile, which linear, trend, and
+median-split statistics all miss. (XOR's edges are purely synergistic, so they have
+no intrinsic flow.) Each scenario is one network, so small differences are noise.
+
+The pilot's prediction of the run time, which counts preprocessing and the pilot
+itself, came within 20% of the actual time on the 3000-sample VAR network (12.7
+against 15.5 minutes); it is a guide for sizing runs, not a guarantee.
