@@ -66,6 +66,8 @@ def edge_roles(data, skeleton, embeddings, settings, prng=None):
     roles = np.full((P, P), "", dtype=object)
     explained_by = np.full((P, P), "", dtype=object)
     parents = {t: set(sk.parents()) for t, sk in skeleton.items()}
+    # A curtailed test reaches the same decision with far fewer permutations.
+    batch = settings.curtail_batch if settings.curtail else None
     for t, sk in skeleton.items():
         base = list(sk.conditionals) + list(sk.target_past)
         others = [p for p in range(P) if p != t]
@@ -80,7 +82,9 @@ def edge_roles(data, skeleton, embeddings, settings, prng=None):
             if p in parents[t]:
                 roles[p, t] = "direct"
                 continue
-            best, value, pv = _max_statistic(cols, cands[p], base, settings.n_perm_max_stat, perm)
+            best, value, pv = _max_statistic(
+                cols, cands[p], base, settings.n_perm_max_stat, perm, False, settings.alpha_max_stat, batch
+            )
             if pv > settings.alpha_max_stat:
                 continue
             # Which selected variable explains the bivariate dependence away?

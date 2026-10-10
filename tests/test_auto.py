@@ -102,3 +102,126 @@ def test_ensemble_runs_every_stage():
     assert set(sk.admitted_by.values()) <= {"gaussian", "coarse"}
     assert set(sk.timing) == {"gaussian", "coarse"} and all(t > 0 for t in sk.timing.values())
     assert all(0.0 <= c["pvalue"] <= 1.0 for c in sk.tdmi_candidates.values())
+
+
+# -- the automatic pipeline ------------------------------------------------------------
+
+from datetime import timedelta  # noqa: E402
+
+from infoflow import auto, datasets  # noqa: E402
+
+
+def test_parse_budget():
+    assert auto._parse_budget(None) is None
+    assert auto._parse_budget(90) == 90.0
+    assert auto._parse_budget("90s") == 90.0
+    assert auto._parse_budget("30m") == 1800.0
+    assert auto._parse_budget("2h") == 7200.0
+    assert auto._parse_budget("1.5d") == 1.5 * 86400
+    assert auto._parse_budget(timedelta(minutes=5)) == 300.0
+    with pytest.raises(ValueError):
+        auto._parse_budget("two hours")
+
+
+PILOT: dict[str, Any] = {
+    "member_seconds": {"gaussian": 10.0, "trend": 20.0, "coarse": 30.0, "ksg": 1000.0},
+    "prescreen": False,
+    "parents_per_target": 2.0,
+    "shared_per_target": 3.0,
+    "edge_seconds": 5.0,
+    "interpret_seconds": 1.0,
+}
+OPTIONS: dict[str, Any] = {
+    "estimators": ("gaussian", "trend", "coarse", "ksg"),
+    "prescreen": False,
+    "include_shared_candidates": True,
+    "interpret": True,
+    "hyperedges": True,
+}
+
+
+def test_predict_counts_rounds_of_parallel_work():
+    # 10 targets on 4 threads: 3 rounds of selection; 20 parent + 30 shared edges: 13 rounds.
+    selection = 1060.0 * 3
+    layers = 5.0 * 13
+    expected = selection + layers + 1.0 * 10 + auto._HYPEREDGE_FACTOR * layers
+    assert auto._predict(OPTIONS, PILOT, 10, 4) == pytest.approx(expected)
+
+
+def test_fit_budget_downgrades_in_order():
+    options, downgrades, predicted = auto._fit_budget(OPTIONS, PILOT, 10, 4, 1.0, {})
+    assert [d.split(":")[0] for d in downgrades] == [
+        "dropped KSG selection",
+        "dropped layer estimates for shared-only candidates",
+        "dropped hyperedge decomposition",
+        "dropped trend selection",
+        "dropped no source pre-screen (pre-screen turned on)",
+    ]
+    assert options["estimators"] == ("gaussian", "coarse")
+    assert options["prescreen"] and not options["include_shared_candidates"] and not options["hyperedges"]
+    assert predicted == pytest.approx(auto._predict(options, PILOT, 10, 4))
+    # A generous budget changes nothing; pinned options are never dropped.
+    assert auto._fit_budget(OPTIONS, PILOT, 10, 4, 1e9, {})[1] == []
+    pinned, downgrades, _ = auto._fit_budget(OPTIONS, PILOT, 10, 4, 1.0, {"estimator": OPTIONS["estimators"]})
+    assert pinned["estimators"] == OPTIONS["estimators"]
+    assert not any("selection" in d for d in downgrades)
+    # Stops as soon as the prediction fits.
+    budget = auto._predict(dict(OPTIONS, estimators=("gaussian", "trend", "coarse")), PILOT, 10, 4)
+    options, downgrades, _ = auto._fit_budget(OPTIONS, PILOT, 10, 4, budget, {})
+    assert len(downgrades) == 1 and options["include_shared_candidates"]
+
+
+def test_infer_discrete_chain():
+    result = auto.infer(datasets.chain(2000, seed=1), preset="fast", prng=0)
+    kind = result.network.dataset["kind"].values
+    assert kind[0, 1] == "parent" and kind[1, 2] == "parent" and kind[0, 2] != "parent"
+    report = result.report
+    assert report.diagnostics["kind"] == "discrete"
+    assert report.estimators == ("coarse",)
+    assert set(report.admitted) == {(0, 1), (1, 2)}
+    assert "preset: fast" in str(report) and np.isfinite(report.predicted_seconds)
+
+
+def test_infer_options_are_checked_and_pinned():
+    data = datasets.chain(1000, seed=2)
+    with pytest.raises(ValueError):
+        auto.infer(data, preset="extreme")
+    with pytest.raises(TypeError):
+        auto.infer(data, not_an_option=1)
+    result = auto.infer(data, preset="fast", estimator="plugin", interpret=False, time_budget="1s", prng=0)
+    assert result.report.estimators == ("plugin",)
+    assert result.report.options["interpret"] is False
+
+
+@pytest.mark.slow
+def test_infer_reuses_pilot_skeletons_exactly():
+    from dit.inference._symbols import as_generator
+
+    import infoflow as inf
+    from infoflow.benchmarks import random_network, simulate_network
+    from infoflow.data import as_trials
+    from infoflow.selection import SkeletonSettings
+
+    graph = random_network(5, prng=4)
+    x = simulate_network(graph, 1500, "var", prng=4)
+    result = auto.infer(x, preset="fast", prng=3)
+    pre, run = (int(s) for s in as_generator(3).integers(0, 2**32, size=2))
+    discrete, embeddings, _, _ = auto._diagnose(as_trials(x), None, pre)
+    settings = auto._skeleton_settings(
+        result.report.estimators, False, result.report.options["threads"], result.report.options["device"], {}
+    )
+    assert isinstance(settings, SkeletonSettings)
+    plain = inf.infer_multiplex(
+        discrete,
+        embeddings=embeddings,
+        skeleton_settings=settings,
+        include_shared_candidates=False,
+        interpret=False,
+        alpha=auto._LAYER_ALPHA,
+        max_resamples=auto._MAX_RESAMPLES,
+        map_fn=inf.thread_map(result.report.options["threads"]),
+        prng=run,
+    )
+    for t in range(5):
+        assert plain.skeleton[t].sources == result.network.skeleton[t].sources
+        assert plain.skeleton[t].target_past == result.network.skeleton[t].target_past
