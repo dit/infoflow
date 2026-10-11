@@ -12,6 +12,7 @@ __all__ = (
     "coupled_logistic",
     "coupled_tent",
     "mute_network",
+    "noisy_eca",
     "orthogonal_features",
     "tent_ring_coupling",
     "var_process",
@@ -151,6 +152,27 @@ def coupled_tent(n=2000, slopes=(1.9, 1.9), coupling=None, seed=None, burn_in=30
         if found != period:
             raise RuntimeError(f"expected a period-{period} orbit after burn-in, found {found or 'none'}")
     return (x >= 0.5).astype(np.int64) if symbols else x
+
+
+def noisy_eca(n=5000, n_cells=6, rule=90, noise=0.05, seed=None, burn_in=200):
+    """
+    An elementary cellular automaton on a ring, each update flipped with probability `noise`.
+
+    Cell ``i`` becomes bit ``4 l + 2 c + r`` of `rule` (Wolfram's numbering) for its
+    left neighbour ``l``, itself ``c``, and right neighbour ``r`` at the previous step.
+    Columns are the cells; each cell's parents are its two neighbours, at delay 1.
+    """
+    if not 0 <= rule <= 255:
+        raise ValueError("rule must be in 0..255")
+    rng = _rng(seed)
+    table = np.array([(rule >> k) & 1 for k in range(8)], dtype=np.int64)
+    x = np.zeros((n + burn_in, n_cells), dtype=np.int64)
+    x[0] = rng.integers(0, 2, n_cells)
+    for t in range(1, n + burn_in):
+        prev = x[t - 1]
+        code = 4 * np.roll(prev, 1) + 2 * prev + np.roll(prev, -1)
+        x[t] = table[code] ^ (rng.random(n_cells) < noise)
+    return x[burn_in:]
 
 
 def xor_synergy(n=3000, noise=0.0, seed=None):

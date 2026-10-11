@@ -155,6 +155,23 @@ states, and observes them through the partition at 1/2 (20000 samples, lag budge
 * **Period-12 window**: no edges, zero entropy rates, cycles of at most 12 states
   (with ``max_history=12``; at 5 node C is flagged by ``n_forbidden``).
 
+Validation on noisy cellular automata
+-------------------------------------
+
+``tests/test_eca_ring.py`` (``pytest -m slow``) runs :func:`~infoflow.datasets.noisy_eca`
+on a six-cell ring (flip noise 0.05, 20000 samples), where the symbols are the whole
+state and the product of machines is exact:
+
+* **Rule 110**: exactly the 12 neighbour edges. Every target transducer has two
+  states, the cell's previous value, and its rows are the rule table to within 0.03.
+  The composed model scores held-out data at the noise floor :math:`h(0.05)`, its
+  exact flows are computed, and the adequacy test passes.
+* **Rule 90** (:math:`l \oplus r`): pure synergy. Each neighbour alone carries no
+  transfer entropy (the pairwise transducers' ``te_model`` is below 0.01 bits), and the
+  joint-input transducer is the one-state XOR table. Extra parents between distant
+  cells appear (on this ring :math:`x_{i+3}(t) \approx x_i(t-1)`), but their layers
+  carry shared flow only.
+
 With a lag budget of 2 instead of 5, the synchronized ring shows spurious edges:
 source candidates reach lags beyond the target's own past budget, and in identical
 series a source at such a lag is the target's own past.
