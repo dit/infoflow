@@ -45,6 +45,12 @@ Nodes and interpretation
 .. automodule:: infoflow.contemporaneous
 .. automodule:: infoflow.hyperedges
 
+Machines
+--------
+
+.. automodule:: infoflow.machines
+.. automodule:: infoflow.network_model
+
 Transfer entropy and tests
 --------------------------
 
