@@ -122,8 +122,11 @@ def test_simulation_reproduces_the_channel_and_passes_adequacy():
     model = infer_machines(data, net, MachineSettings(stability=False)).model
     sim = model.simulate(5000, seed=0)
     assert np.mean(sim[1:, 1] == sim[:-1, 0]) == pytest.approx(0.9, abs=0.02)
-    adequacy = model.adequacy(DiscreteData.from_discrete(_delayed_copy(3000, 1, 0.1, 4)), n_sim=9, seed=0)
+    held = DiscreteData.from_discrete(_delayed_copy(3000, 1, 0.1, 4))
+    adequacy = model.adequacy(held, n_sim=39, seed=0)
     assert not adequacy["flagged"].any()
+    with pytest.raises(ValueError, match="cannot reach alpha"):
+        model.adequacy(held, n_sim=19, seed=0)
 
 
 def test_to_hmm_guard():

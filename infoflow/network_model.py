@@ -312,14 +312,16 @@ class NetworkModel:
             coords={"node": self.names},
         )
 
-    def adequacy(self, data, n_sim=19, alpha=0.05, seed=None):
+    def adequacy(self, data, n_sim=99, alpha=0.05, seed=None):
         """
         Parametric-bootstrap check of the factorization on (held-out) data.
 
         Each node's log-loss on `data` is compared with its log-loss on `n_sim`
         simulations from the model with the same trial lengths. A node whose observed
         loss exceeds what the model expects of itself is flagged: its present depends
-        on something the product of machines leaves out.
+        on something the product of machines leaves out. The smallest attainable
+        p-value is ``1 / (n_sim + 1)``, so `n_sim` must exceed ``1 / alpha - 1`` for any
+        node to be flagged.
 
         Returns
         -------
@@ -327,6 +329,8 @@ class NetworkModel:
             Over ``(node,)``: ``observed``, ``expected`` (mean simulated loss), ``gap``,
             ``pvalue`` (one-sided), ``flagged``.
         """
+        if 1 / (n_sim + 1) >= alpha:
+            raise ValueError(f"n_sim={n_sim} cannot reach alpha={alpha}: use n_sim > {int(np.ceil(1 / alpha)) - 1}")
         rng = as_generator(seed)
         trials, _ = self._trials(data)
         observed = self.log_loss(data)["model_bits"].values
