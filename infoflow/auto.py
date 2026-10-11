@@ -106,6 +106,10 @@ class AutoReport:
         Seconds.
     admitted : dict
         ``(source, target) -> estimator`` that admitted each parent.
+    machines : dict
+        With ``machines=True``: the machine layer's seconds, counts, and skipped
+        machines with reasons (:meth:`~infoflow.machines.MachineLayer.report`). The
+        layer is pinned, so it runs outside the time budget.
     warnings : list of str
     """
 
@@ -119,6 +123,7 @@ class AutoReport:
     actual_seconds: float = float("nan")
     time_budget: float | None = None
     admitted: dict = field(default_factory=dict)
+    machines: dict = field(default_factory=dict)
     warnings: list = field(default_factory=list)
 
     def __str__(self):
@@ -148,6 +153,13 @@ class AutoReport:
             for name in self.admitted.values():
                 counts[name] = counts.get(name, 0) + 1
             lines.append("parents admitted by: " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
+        if self.machines:
+            m = self.machines
+            lines.append(
+                f"machines: {m['nodes']} node(s), {m['edges']} edge(s), {m['targets']} target(s), "
+                f"composed model {'built' if m['model'] else 'not built'}, in {fmt(m['seconds'])}"
+            )
+            lines += [f"machines skipped {key}: {reason}" for key, reason in m["skipped"].items()]
         lines += [f"warning: {w}" for w in self.warnings]
         return "\n".join(lines)
 
@@ -591,6 +603,8 @@ def infer(
     final, report.downgrades, predicted = _fit_budget(
         options, pilot, len(targets), map_threads(options), remaining, pinned_skeleton | pinned_infer
     )
+    if budget is not None and pinned_infer.get("machines"):
+        report.warnings.append("the predicted time excludes the machine layer (machines=True runs outside the budget)")
     report.predicted_seconds = elapsed + predicted
     pilot["elapsed_before_run"] = elapsed
     report.pilot = pilot
@@ -640,5 +654,7 @@ def infer(
     report.admitted = {
         (v[0], t): name for t, sk in network.skeleton.items() for v, name in sk.admitted_by.items() if sk.significant
     }
+    if network.machines is not None:
+        report.machines = network.machines.report()
     report.actual_seconds = time.perf_counter() - started
     return AutoResult(network, report)

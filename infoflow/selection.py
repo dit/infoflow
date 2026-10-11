@@ -309,6 +309,13 @@ def _equal_frequency(ranks, bins):
     return np.minimum((ranks * bins).astype(np.int64), bins - 1)
 
 
+def rank_bins(values, bins):
+    """
+    Equal-frequency bins of the ranks of `values`; ``bins=2`` is a median split.
+    """
+    return _equal_frequency(_ranks(values), bins)
+
+
 def _residual_bits(E, ey, vy):
     """
     :math:`\\tfrac12 \\log_2` of the target's residual variance `vy` over what remains after
@@ -475,7 +482,7 @@ class _RankColumns(_Columns):
         self._ranked = (
             np.column_stack([_ranks(values[:, i]) for i in range(values.shape[1])]) if values.size else values
         )
-        self.y, self.Ky = _equal_frequency(_ranks(y), target_bins), target_bins
+        self.y, self.Ky = rank_bins(y, target_bins), target_bins
         self._codes = _equal_frequency(self._ranked, source_bins) if values.size else values.astype(np.int64)
         self.alphabet = dict.fromkeys(self.variables, source_bins)
         self.n = len(self.y)

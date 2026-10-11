@@ -63,6 +63,9 @@ causal = [
 gpu = [
     "torch>=2.4",
 ]
+machines = [
+    "sofic",
+]
 dev = [
     "infoflow[test,docs,parallel]",
     "ruff",
