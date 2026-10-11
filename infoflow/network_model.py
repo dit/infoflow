@@ -97,6 +97,31 @@ class _Component:
         return self.rows.get((state, u) if self.transducer else state)
 
 
+def count_forbidden(machine, trials):
+    """
+    Observed symbols that an ε-machine assigns probability zero once synchronized.
+
+    Each forbidden symbol resynchronizes the tracker. A machine reconstructed with too
+    short a history can be confidently wrong (e.g. a deterministic cycle for a process
+    whose period needs a longer history to resolve); this counts how often.
+    """
+    comp = _Component(machine)
+    n = 0
+    for seq in trials:
+        possible = set(comp.states)
+        for obs in seq:
+            nxt = set()
+            for state in possible:
+                row = comp.lookup(state)
+                if row is not None and obs in row[0]:
+                    nxt.add(row[2][row[0].index(obs)])
+            if not nxt:
+                n += len(possible) == 1
+                nxt = set(comp.states)
+            possible = nxt
+    return int(n)
+
+
 class NetworkModel:
     """
     The composed generative model of a network's machine layer.

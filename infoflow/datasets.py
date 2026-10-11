@@ -10,8 +10,10 @@ __all__ = (
     "chain",
     "common_driver",
     "coupled_logistic",
+    "coupled_tent",
     "mute_network",
     "orthogonal_features",
+    "tent_ring_coupling",
     "var_process",
     "xor_synergy",
 )
@@ -89,6 +91,66 @@ def coupled_logistic(n=2000, coupling=None, r=4.0, noise_std=0.0, seed=None, bur
         if noise_std:
             x[t] = np.clip(x[t] + rng.normal(scale=noise_std, size=P), 1e-9, 1 - 1e-9)
     return x[burn_in:]
+
+
+def tent_ring_coupling(e_a, e_b=None, e_c=None, e_d=None):
+    """
+    The coupling matrix of four maps with A -> B, B -> C, B -> D, C -> A, D -> A.
+
+    Processes are ordered (A, B, C, D); ``C[i, j]`` couples ``j`` into ``i``. Each
+    node's coupling `e_*` defaults to `e_a`; A's is split equally between C and D.
+    """
+    e_b, e_c, e_d = (e_a if e is None else e for e in (e_b, e_c, e_d))
+    C = np.zeros((4, 4))
+    C[0, 2] = C[0, 3] = e_a / 2
+    C[1, 0], C[2, 1], C[3, 1] = e_b, e_c, e_d
+    return C
+
+
+def _minimal_period(x, max_period=256, tol=1e-9, window=500):
+    tail = x[-window:]
+    for p in range(1, min(max_period, len(tail) // 2) + 1):
+        if np.max(np.abs(tail[p:] - tail[:-p])) < tol:
+            return p
+    return None
+
+
+def coupled_tent(n=2000, slopes=(1.9, 1.9), coupling=None, seed=None, burn_in=3000, symbols=True, period=None):
+    """
+    Coupled tent maps ``x_i <- (1 - e_i) f_i(x_i) + sum_j C[i, j] f_j(x_j)``.
+
+    ``f_i(x) = s_i min(x, 1 - x)`` with slope ``s_i = slopes[i]``; ``e_i = sum_j C[i, j]``.
+    Default: two maps with 0 -> 1 coupling 0.2 (see :func:`tent_ring_coupling` for a
+    four-map ring). With `symbols`, the generating partition at 1/2 is returned as
+    integer symbols (``x >= 1/2``); otherwise the states.
+
+    Slopes must be below 2: the slope-2 map loses a bit per step and collapses to 0 in
+    floating point. If `period` is given, the orbit after `burn_in` must be periodic
+    with exactly that minimal period, or a RuntimeError is raised: periodic windows of
+    coupled maps are narrow, and a change in the numerics can move them.
+    """
+    s = np.asarray(slopes, dtype=float)
+    if np.any(s <= 0) or np.any(s >= 2):
+        raise ValueError("slopes must lie in (0, 2)")
+    P = len(s)
+    if coupling is None:
+        C = np.zeros((P, P))
+        C[1, 0] = 0.2
+    else:
+        C = np.asarray(coupling, dtype=float)
+    rng = _rng(seed)
+    x = np.zeros((n + burn_in, P))
+    x[0] = rng.uniform(0.1, 0.9, size=P)
+    e = C.sum(axis=1)
+    for t in range(1, n + burn_in):
+        f = s * np.minimum(x[t - 1], 1 - x[t - 1])
+        x[t] = (1 - e) * f + C @ f
+    x = x[burn_in:]
+    if period is not None:
+        found = _minimal_period(x)
+        if found != period:
+            raise RuntimeError(f"expected a period-{period} orbit after burn-in, found {found or 'none'}")
+    return (x >= 0.5).astype(np.int64) if symbols else x
 
 
 def xor_synergy(n=3000, noise=0.0, seed=None):

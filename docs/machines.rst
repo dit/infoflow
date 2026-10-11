@@ -56,7 +56,20 @@ every machine is refit on the two time halves of the data (``stability``: the
 fraction of halves that reproduce the topology), and every node machine at
 ``max_history + 1``. A node that gains states there is marked ``unsynchronized`` with
 a warning: its history is too short to synchronize, so its state count is a lower
-bound, not the process's ε-machine.
+bound, not the process's ε-machine. Every node machine is also replayed on the data
+it was fitted to; ``n_forbidden`` counts the symbols it assigns probability zero once
+synchronized, with a warning when any. A too-short history can turn a long-period
+process into a confidently wrong deterministic cycle, and this is how it shows.
+
+Two limits are worth knowing. Processes whose Markov order is infinite (no finite
+history synchronizes every past, as for the tent map's generating partition at
+Misiurewicz parameters) have no finite-history reconstruction: CSSR splits the
+unsynchronized histories into extra, low-probability states, while the entropy rate
+still converges. And transCSSR's cost grows with :math:`(|X||Y|)^L`: for a target
+with three binary parents a joint history of 3 already takes minutes and over-splits
+on tens of thousands of samples, so ``transducer_max_history`` defaults to at most 2.
+``excess_entropy=False`` skips the excess entropy and crypticity, which need the
+reverse ε-machine and can take tens of seconds per node when it is infinite.
 
 Measures
 --------
@@ -121,6 +134,30 @@ are well defined (a delayed parent is read from a shift register).
 
 Pickling a network (:meth:`~infoflow.MultiplexNetwork.save`) stores the machines
 through sofic's serialization and rebuilds the composed model on load.
+
+Validation on coupled tent maps
+-------------------------------
+
+``tests/test_tent_ring.py`` (``pytest -m slow``; needs a local ``chaos_anatomy``)
+couples four tent maps on the ring A → B, B → C, B → D, C → A, D → A, each at a
+Misiurewicz slope whose exact generating-partition ε-machine has 4, 5, 6, or 7
+states, and observes them through the partition at 1/2 (20000 samples, lag budget 5):
+
+* **Uncoupled**: no edges; every node's entropy rate is within 0.02 bits of
+  :math:`\log_2 s`. The exact topologies are not recovered (infinite Markov order).
+* **Weak (0.1) and moderate (0.3) coupling**: every true edge is found, with extra
+  edges (2 and 7): the binary partition does not screen off the maps' continuous
+  state, so indirect paths leak through. In the moderate regime the composed model
+  beats each node's own ε-machine by 0.12--0.14 bits per symbol on held-out data; in
+  the weak regime (flows of about 0.04 bits) it does not.
+* **Synchronized (0.5, identical slopes)**: identical series, no edges, identical
+  node machines -- synchronization hides the topology.
+* **Period-12 window**: no edges, zero entropy rates, cycles of at most 12 states
+  (with ``max_history=12``; at 5 node C is flagged by ``n_forbidden``).
+
+With a lag budget of 2 instead of 5, the synchronized ring shows spurious edges:
+source candidates reach lags beyond the target's own past budget, and in identical
+series a source at such a lag is the target's own past.
 
 With ``infer()``
 ----------------

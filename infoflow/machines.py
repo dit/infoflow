@@ -81,6 +81,10 @@ class MachineSettings:
     stability : bool
         Refit every machine on the two time halves of the data (topology stability)
         and every node machine at ``max_history + 1`` (state growth).
+    excess_entropy : bool
+        Compute each node's excess entropy and crypticity. They need the reverse
+        ε-machine, which is infinite for many processes; sofic then falls back to
+        block entropies, which can take tens of seconds per node.
     max_composed_states : int
         Largest explicit composed HMM built by :class:`~infoflow.network_model.NetworkModel`.
     exact_flows : bool
@@ -99,6 +103,7 @@ class MachineSettings:
     include_shared_candidates: bool = False
     te_history: int = 1
     stability: bool = True
+    excess_entropy: bool = True
     max_composed_states: int = 4096
     exact_flows: bool = True
 
@@ -118,7 +123,9 @@ class MachineLayer:
     ----------
     dataset : xarray.Dataset
         Node variables over ``(node,)``: ``C_mu``, ``h_mu``, ``E``, ``crypticity``,
-        ``n_states``, ``n_symbols`` (symbols counted), ``max_history``, ``stability``
+        ``n_states``, ``n_symbols`` (symbols counted), ``n_forbidden`` (fitted symbols
+        the machine assigns probability zero once synchronized, with a warning when
+        any), ``max_history``, ``stability``
         (fraction of time halves reproducing the topology) and ``unsynchronized``
         (more states at ``max_history + 1``). Target variables over ``(node,)``,
         prefixed ``target_``, for the joint-input transducers: ``target_C``
@@ -128,7 +135,7 @@ class MachineLayer:
         ``target_n_states``, ``target_n_symbols``, ``target_stability``. Edge variables
         over ``(source, target)`` for the pairwise transducers: ``edge_n_states``,
         ``channel_C`` (channel statistical complexity), ``driven_h`` (driven entropy
-        rate), ``te_model`` (:func:`driven_transfer_entropy`), ``te_gap`` (``te_model``
+        rate, from entropy-rate bounds converged to 0.001 bits), ``te_model`` (:func:`driven_transfer_entropy`), ``te_gap`` (``te_model``
         minus the network's ``weight[te]``), ``edge_n_symbols``, ``edge_stability``,
         and ``admitted_by`` (the selection estimators that admitted the source). With
         the composed model, ``model_te``, ``model_tdmi``, ``model_intrinsic``,
@@ -310,14 +317,56 @@ def _fit_transducer(xs, ys, max_history, s):
     )
 
 
-def _node_measures(machine):
-    return {
+def _node_measures(machine, excess_entropy=True):
+    from sofic.exceptions import SoficError
+
+    out = {
         "C_mu": max(0.0, float(machine.statistical_complexity())),
         "h_mu": float(machine.entropy_rate()),
-        "E": float(machine.excess_entropy()),
-        "crypticity": float(machine.crypticity()),
         "n_states": len(list(machine.states())),
     }
+    if not excess_entropy:
+        return out
+    # E needs the reverse ε-machine, which is infinite for many processes (sofic then
+    # falls back to block entropies, which can fail); the node machine stays valid.
+    try:
+        out["E"] = float(machine.excess_entropy())
+        out["crypticity"] = out["C_mu"] - out["E"]
+    except (RuntimeError, ValueError, SoficError):
+        out["E"] = out["crypticity"] = np.nan
+    return out
+
+
+def filled_transducer(transducer, inputs=None):
+    """
+    A copy of `transducer` that reads every input symbol in every state.
+
+    A reconstructed state never saw some inputs; driving it with an input process
+    would otherwise send those inputs to sofic's absorbing reject state. A missing
+    input takes the state's row averaged over the inputs it saw (as in
+    :class:`~infoflow.network_model.NetworkModel`).
+    """
+    from sofic.graph import ATTR_OUTPUT, ATTR_PROB, ATTR_SYMBOL
+
+    inputs = frozenset(transducer.alphabets()[0]) | frozenset(inputs or ())
+    result = transducer.copy()
+    for state in list(result.states()):
+        rows = {}
+        for tr in result.graph.out_transitions(state):
+            rows.setdefault(tr.data[ATTR_SYMBOL], []).append(
+                (tr.target, tr.data[ATTR_OUTPUT], float(tr.data[ATTR_PROB]))
+            )
+        missing = inputs - set(rows)
+        if not missing or not rows:
+            continue
+        pooled = {}
+        for options in rows.values():
+            for target, output, prob in options:
+                pooled[(target, output)] = pooled.get((target, output), 0.0) + prob / len(rows)
+        for symbol in missing:
+            for (target, output), prob in pooled.items():
+                result.add_transition(state, target, symbol, output, prob=prob)
+    return result
 
 
 def driven_transfer_entropy(transducer, input_process, history=1):
@@ -333,7 +382,7 @@ def driven_transfer_entropy(transducer, input_process, history=1):
     from sofic.generators.channel_measures import driven_joint_generator
     from sofic.generators.directional_flow import _window_distribution
 
-    joint = driven_joint_generator(transducer, input_process)
+    joint = driven_joint_generator(filled_transducer(transducer, input_process.observation_alphabet), input_process)
     dist = _window_distribution(joint, history=history)
     inputs = [2 * k for k in range(history + 1)]
     past = [2 * k + 1 for k in range(history)]
@@ -341,13 +390,19 @@ def driven_transfer_entropy(transducer, input_process, history=1):
 
 
 def _channel_measures(transducer, input_process, history):
-    from sofic.generators.channel_measures import channel_statistical_complexity, driven_entropy_rate
+    from sofic.automata.transducer_operations import transduce_generator
+    from sofic.generators.channel_measures import channel_statistical_complexity
+    from sofic.generators.measures import entropy_rate
 
+    filled = filled_transducer(transducer, input_process.observation_alphabet)
+    # The driven output is a non-unifilar HMM: its mixed states rarely close, so the
+    # exact rate can take minutes, while the Cover & Thomas bounds converge fast.
+    driven_h = entropy_rate(transduce_generator(filled, input_process), "bounds", tol=1e-3, max_length=12)
     return {
         "n_states": len(list(transducer.states())),
-        "channel_C": max(0.0, float(channel_statistical_complexity(transducer, input_process))),
-        "driven_h": float(driven_entropy_rate(transducer, input_process)),
-        "te_model": driven_transfer_entropy(transducer, input_process, history),
+        "channel_C": max(0.0, float(channel_statistical_complexity(filled, input_process))),
+        "driven_h": float(driven_h),
+        "te_model": driven_transfer_entropy(filled, input_process, history),
     }
 
 
@@ -360,7 +415,14 @@ def _topology(machine):
 def _node_job(data, halves, p, max_history, s):
     trials = _node_trials(data, p, s.symbols)
     machine = _fit_machine(trials, max_history, s)
-    out = {"machine": machine, **_node_measures(machine), "n_symbols": sum(map(len, trials))}
+    from .network_model import count_forbidden
+
+    out = {
+        "machine": machine,
+        **_node_measures(machine, s.excess_entropy),
+        "n_symbols": sum(map(len, trials)),
+        "n_forbidden": count_forbidden(machine, trials),
+    }
     if s.stability:
         key, agree = _topology(machine), []
         for half in halves:
@@ -515,7 +577,7 @@ def infer_machines(data, network, settings=None, embeddings=None, map_fn=map):
     nan_node = np.full(P, np.nan)
     node_vars = {
         k: nan_node.copy()
-        for k in ("C_mu", "h_mu", "E", "crypticity", "n_states", "n_symbols", "stability", "max_history")
+        for k in ("C_mu", "h_mu", "E", "crypticity", "n_states", "n_symbols", "n_forbidden", "stability", "max_history")
     }
     node_vars["unsynchronized"] = np.zeros(P, dtype=bool)
     target_vars = {
@@ -589,13 +651,20 @@ def infer_machines(data, network, settings=None, embeddings=None, map_fn=map):
         coords=coords,
         attrs={"description": "Machine layer: epsilon-machines and epsilon-transducers (bits)"},
     )
-    if any(node_vars["unsynchronized"]):
-        import warnings
+    import warnings
 
+    if any(node_vars["unsynchronized"]):
         grown = [names[p] for p in range(P) if node_vars["unsynchronized"][p]]
         warnings.warn(
             f"node machine(s) {', '.join(grown)} gain states at max_history + 1: the history may be too "
             "short to synchronize, so their state counts are lower bounds, not the processes' ε-machines.",
+            stacklevel=2,
+        )
+    forbidding = [names[p] for p in range(P) if node_vars["n_forbidden"][p] > 0]
+    if forbidding:
+        warnings.warn(
+            f"node machine(s) {', '.join(forbidding)} forbid symbols observed in the data they were fitted "
+            "to: max_history is too short to resolve the process (see n_forbidden).",
             stacklevel=2,
         )
     from .network_model import NetworkModel
