@@ -2,12 +2,11 @@
 Coupled tent maps on the ring A -> B, B -> C, B -> D, C -> A, D -> A, seen through the
 generating partition at 1/2.
 
-The slopes are Misiurewicz points whose exact generating-partition ε-machines have
-4, 5, 6, and 7 states; the slopes and the exact machines come from chaos_anatomy (a
-local checkout: ``uv pip install -e ../chaos_anatomy``), and the module is skipped
-without it. The five regimes were located by Lyapunov and periodicity sweeps of this
-topology: uncoupled, weak (0.1), moderate (0.3), synchronized (0.5 with identical
-slopes), and a period-12 window.
+The slopes are Misiurewicz points; their exact generating-partition ε-machines
+(4, 5, 6, and 7 states) are hard-coded below as edge lists ``(state, symbol, next)``.
+The five regimes were located by Lyapunov and periodicity sweeps of this topology:
+uncoupled, weak (0.1), moderate (0.3), synchronized (0.5 with identical slopes), and
+a period-12 window.
 """
 
 import functools
@@ -16,14 +15,10 @@ import warnings
 import numpy as np
 import pytest
 
-pytest.importorskip("chaos_anatomy")
 sofic_inference = pytest.importorskip("sofic.inference")
 if not hasattr(sofic_inference, "Trials"):
     pytest.skip("needs sofic with multi-trial CSSR (sofic.inference.Trials)", allow_module_level=True)
 
-from chaos_anatomy.anatomy import forward_causal_graph  # noqa: E402
-from chaos_anatomy.misiurewicz import misiurewicz_parameters  # noqa: E402
-from chaos_anatomy.partitions import build_model  # noqa: E402
 from sofic.generators.epsilon_machine import EpsilonMachine  # noqa: E402
 from sofic.graph import ATTR_EMISSION, ATTR_PROB  # noqa: E402
 from sofic.inference import topology_key  # noqa: E402
@@ -37,8 +32,24 @@ from infoflow.selection import SkeletonSettings  # noqa: E402
 pytestmark = pytest.mark.slow
 
 NAMES = ["A", "B", "C", "D"]
-# Roots of a^3 - 2a - 2, a^3 - a^2 - 2, a^4 - a^3 - 2a - 2, a^4 - a^3 - a^2 - 2.
-PLANNED = {"A": 1.76929235, "B": 1.69562077, "C": 1.87370856, "D": 1.85356028}
+# Slopes: the real roots in (sqrt 2, 2) of a^3 - 2a - 2, a^3 - a^2 - 2,
+# a^4 - a^3 - 2a - 2, and a^4 - a^3 - a^2 - 2.
+SLOPES = {
+    "A": 1.7692923542386314,
+    "B": 1.695620769559862,
+    "C": 1.8737085638967708,
+    "D": 1.8535602775842457,
+}
+# Exact ε-machines of the generating partition (topology only).
+EXACT_MACHINES = {
+    "A": [(0, 1, 1), (1, 0, 2), (1, 1, 0), (2, 0, 0), (2, 1, 3), (3, 0, 2), (3, 1, 3)],
+    "B": [(0, 1, 1), (1, 0, 2), (2, 0, 0), (2, 1, 3), (3, 0, 0), (3, 1, 4), (4, 0, 3), (4, 1, 4)],
+    "C": [(0, 1, 1), (1, 0, 2), (2, 0, 3), (2, 1, 3), (3, 0, 0), (3, 1, 4), (4, 0, 5), (4, 1, 4), (5, 0, 3), (5, 1, 4)],
+    "D": [
+        (0, 1, 1), (1, 0, 2), (2, 0, 3), (3, 0, 0), (3, 1, 4), (4, 0, 5),
+        (4, 1, 6), (5, 0, 0), (5, 1, 6), (6, 0, 4), (6, 1, 6),
+    ],
+}  # fmt: skip
 EXACT_STATES = {"A": 4, "B": 5, "C": 6, "D": 7}
 TRUE_EDGES = {("A", "B"), ("B", "C"), ("B", "D"), ("C", "A"), ("D", "A")}
 N_TRAIN, N_HELD = 20000, 10000
@@ -53,29 +64,16 @@ FAST = SkeletonSettings(
 
 
 @functools.cache
-def slopes():
+def exact_machine(name):
     """
-    The chaos_anatomy Misiurewicz parameters nearest the planned slopes.
+    The exact generating-partition ε-machine of node `name` (probabilities omitted).
     """
-    params = [a for a, _ in misiurewicz_parameters(160, a_min=np.sqrt(2), a_max=2.0)]
-    found = {name: min(params, key=lambda a, t=target: abs(a - t)) for name, target in PLANNED.items()}
-    assert all(abs(found[n] - PLANNED[n]) < 1e-7 for n in NAMES), found
-    return found
-
-
-@functools.cache
-def exact_machine(a):
-    """
-    The exact generating-partition ε-machine topology at slope `a` (probabilities omitted).
-    """
-    model = build_model(a)
-    states, alphabet, transitions = forward_causal_graph(model.matrix, model.labels([0.5]), model.pi)
-    machine = EpsilonMachine(observation_alphabet=frozenset(int(s) for s in alphabet))
-    for state in states:
+    machine = EpsilonMachine(observation_alphabet=frozenset({0, 1}))
+    for state in {s for edge in EXACT_MACHINES[name] for s in (edge[0], edge[2])}:
         machine.graph.add_state(state)
-    for (state, symbol), target in transitions.items():
-        machine.graph.add_transition(state, target, **{ATTR_PROB: 1.0, ATTR_EMISSION: int(symbol)})
-    return machine, model.measures([0.5])
+    for state, symbol, target in EXACT_MACHINES[name]:
+        machine.graph.add_transition(state, target, **{ATTR_PROB: 1.0, ATTR_EMISSION: symbol})
+    return machine
 
 
 REGIMES = {
@@ -94,7 +92,7 @@ def regime(name):
     (training symbols, held-out continuation, network with machines) for one regime.
     """
     spec = REGIMES[name]
-    s = slopes()
+    s = SLOPES
     values = [s["A"]] * 4 if spec.get("same_slopes") else [s[n] for n in NAMES]
     x = coupled_tent(N_TRAIN + N_HELD, values, spec["coupling"], seed=0, period=spec.get("period"))
     train, held = x[:N_TRAIN], x[N_TRAIN:]
@@ -125,23 +123,23 @@ def edges(net):
 
 
 def test_exact_machines_have_the_planned_state_counts():
-    for name, a in slopes().items():
-        machine, _ = exact_machine(a)
+    for name in NAMES:
+        machine = exact_machine(name)
         assert len(list(machine.states())) == EXACT_STATES[name]
+        labels = [(state, symbol) for state, symbol, _ in EXACT_MACHINES[name]]
+        assert len(labels) == len(set(labels))  # unifilar
 
 
 def test_uncoupled_is_the_false_positive_control():
     _, held, net = regime("uncoupled")
     assert edges(net) == set()
     ds = net.machines.dataset
-    for name, a in slopes().items():
-        _, exact = exact_machine(a)
-        h = float(ds["h_mu"].sel(node=name))
-        assert h == pytest.approx(np.log2(a), abs=0.02)
-        assert h == pytest.approx(exact["h_mu"], abs=0.02)
+    for name, a in SLOPES.items():
+        # A uniform-slope Markov map's acim has entropy rate log2(slope).
+        assert float(ds["h_mu"].sel(node=name)) == pytest.approx(np.log2(a), abs=0.02)
     assert set(net.machines.model.roles.values()) == {"source"}
     loss = net.machines.model.log_loss(held)
-    assert np.allclose(loss["model_bits"], [np.log2(slopes()[n]) for n in NAMES], atol=0.02)
+    assert np.allclose(loss["model_bits"], [np.log2(SLOPES[n]) for n in NAMES], atol=0.02)
 
 
 @pytest.mark.xfail(
@@ -151,8 +149,8 @@ def test_uncoupled_is_the_false_positive_control():
 )
 def test_uncoupled_cssr_recovers_the_exact_topologies():
     _, _, net = regime("uncoupled")
-    for name, a in slopes().items():
-        assert topology_key(net.machines.nodes[name]) == topology_key(exact_machine(a)[0])
+    for name in NAMES:
+        assert topology_key(net.machines.nodes[name]) == topology_key(exact_machine(name))
 
 
 @pytest.mark.parametrize("name", ["weak", "moderate"])
@@ -201,7 +199,7 @@ def test_synchronization_hides_the_topology():
     assert edges(net) == set()
     keys = {topology_key(net.machines.nodes[n]) for n in NAMES}
     assert len(keys) == 1
-    a = slopes()["A"]
+    a = SLOPES["A"]
     assert np.allclose(net.machines.dataset["h_mu"].values, np.log2(a), atol=0.02)
     assert set(net.machines.model.roles.values()) == {"source"}
 

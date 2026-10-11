@@ -138,7 +138,7 @@ through sofic's serialization and rebuilds the composed model on load.
 Validation on coupled tent maps
 -------------------------------
 
-``tests/test_tent_ring.py`` (``pytest -m slow``; needs a local ``chaos_anatomy``)
+``tests/test_tent_ring.py`` (``pytest -m slow``)
 couples four tent maps on the ring A → B, B → C, B → D, C → A, D → A, each at a
 Misiurewicz slope whose exact generating-partition ε-machine has 4, 5, 6, or 7
 states, and observes them through the partition at 1/2 (20000 samples, lag budget 5):
