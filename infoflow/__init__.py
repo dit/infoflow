@@ -11,15 +11,17 @@ estimators and null generators of :mod:`dit.inference`.
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _version
 
-from . import benchmarks, datasets, preprocess
+from . import benchmarks, datasets, draw, preprocess
 from .auto import AutoReport, AutoResult, infer
 from .checkpoint import Checkpoint
 from .compare import NetworkComparison, compare_networks
 from .data import DiscreteData, realizations
 from .embedding import Embedding
 from .layers import LAYERS, layer_statistics
+from .machines import MachineLayer, MachineSettings, infer_machines
 from .measures import edge_flows, intrinsic_flow
 from .network import MultiplexNetwork, infer_multiplex
+from .network_model import NetworkModel
 from .parallel import dask_map, thread_map
 from .preprocess import preprocess as run_preprocess
 from .selection import SkeletonSettings, infer_skeleton, select_parents

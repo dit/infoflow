@@ -56,12 +56,16 @@ parallel = [
 plot = [
     "holoviews",
     "bokeh",
+    "matplotlib",
 ]
 causal = [
     "tigramite",
 ]
 gpu = [
     "torch>=2.4",
+]
+machines = [
+    "sofic",
 ]
 dev = [
     "infoflow[test,docs,parallel]",
@@ -140,7 +144,7 @@ known-first-party = ["infoflow"]
 python-version = "3.12"
 
 [tool.ty.analysis]
-allowed-unresolved-imports = ["dask", "dask.**", "holoviews", "holoviews.**", "tigramite", "tigramite.**", "sofic", "sofic.**", "torch", "torch.**"]
+allowed-unresolved-imports = ["dask", "dask.**", "holoviews", "holoviews.**", "matplotlib", "matplotlib.**", "tigramite", "tigramite.**", "sofic", "sofic.**", "torch", "torch.**"]
 
 [tool.ty.rules]
 unresolved-import = "error"

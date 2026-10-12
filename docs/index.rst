@@ -33,6 +33,8 @@ and false-discovery-rate control.
    skeleton
    interpretation
    hyperedges
+   machines
+   drawing
    workflow
    gpu
    benchmarks

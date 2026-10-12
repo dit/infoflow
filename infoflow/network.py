@@ -3,6 +3,7 @@ Multiplex network inference and the :class:`MultiplexNetwork` result.
 """
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import networkx as nx
 import numpy as np
@@ -13,6 +14,9 @@ from .data import DiscreteData, realizations
 from .embedding import Embedding
 from .layers import LAYERS, adjust_layer_pvalues, layer_statistics
 from .selection import SkeletonSettings, _cmi, _Columns, infer_skeleton
+
+if TYPE_CHECKING:
+    from .machines import MachineLayer
 
 __all__ = (
     "EDGE_LAYERS",
@@ -48,6 +52,9 @@ class MultiplexNetwork:
     hyperedges : xarray.Dataset, None
         Detected and classified PID hyperedges (:func:`~infoflow.hyperedges.multivariate_hyperedges`),
         when requested.
+    machines : MachineLayer, None
+        ε-machines, ε-transducers, and the composed model
+        (:func:`~infoflow.machines.infer_machines`), when requested.
     """
 
     dataset: xr.Dataset
@@ -56,6 +63,7 @@ class MultiplexNetwork:
     settings: dict = field(default_factory=dict)
     report: object = None
     hyperedges: xr.Dataset | None = None
+    machines: "MachineLayer | None" = None
 
     @property
     def names(self):
@@ -137,6 +145,8 @@ class MultiplexNetwork:
             kind = str(self.dataset["kind"].sel(source=src, target=tgt).item())
             delay = int(self.dataset["delay"].sel(source=src, target=tgt))
             lines.append(f"{src:>6} -> {tgt:<6}  {kind:<16}  {delay:5d}  " + "  ".join(cells))
+        if self.machines is not None:
+            lines += ["", self.machines.summary()]
         return "\n".join(lines)
 
 
@@ -232,6 +242,8 @@ def infer_multiplex(
     checkpoint=None,
     device=None,
     layer_symbols="preprocessed",
+    machines=False,
+    machine_settings=None,
     prng=None,
 ):
     """
@@ -308,6 +320,11 @@ def infer_multiplex(
         siblings' contexts because of a chance fluctuation in the same data, which
         biases their synergy upward; holding out the estimation data removes this
         post-selection bias at the cost of power.
+    machines : bool
+        Add the machine layer (:func:`~infoflow.machines.infer_machines`): an ε-machine
+        per node, an ε-transducer per edge and per target, and their composed model,
+        as ``network.machines``. Needs sofic (``pip install 'infoflow[machines]'``).
+    machine_settings : MachineSettings or dict, None
     prng : None, int, Generator
 
     Returns
@@ -449,8 +466,9 @@ def infer_multiplex(
         "embeddings": embeddings if isinstance(embeddings, list) else [embeddings] * discrete.n_processes,
         "skeleton_settings": settings,
         "discretizers": [getattr(d, "params", lambda d=d: {"name": str(d)})() for d in discrete.discretizers],
+        "machines": machines,
     }
-    return MultiplexNetwork(
+    network = MultiplexNetwork(
         dataset=dataset,
         skeleton=skeleton,
         edges={k: v[0] for k, v in results.items()},
@@ -458,6 +476,12 @@ def infer_multiplex(
         report=report,
         hyperedges=pid,
     )
+    if machines:
+        from .machines import infer_machines
+
+        network.machines = infer_machines(estimation_data, network, machine_settings, map_fn=map_fn)
+        provenance["machine_settings"] = network.machines.settings
+    return network
 
 
 def _assemble(data, names, skeleton, results, alpha, fdr_dependent):

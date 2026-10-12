@@ -37,5 +37,8 @@ Input and output
 
 :func:`infoflow.io.load_mat` and :func:`infoflow.io.load_fieldtrip` read MATLAB
 data; :func:`infoflow.io.export_brainnet` writes BrainNet Viewer ``.node``/``.edge``
-files. :func:`infoflow.plot.plot_layer` and :func:`infoflow.plot.plot_multiplex`
-draw layers with HoloViews (``pip install infoflow[plot]``).
+files. :func:`infoflow.draw.draw` draws networks as decomposition glyphs, parallel
+arcs, stacked planes, or layer matrices, interactively or as static figures
+(:doc:`drawing`); :func:`infoflow.plot.plot_layer` and
+:func:`infoflow.plot.plot_multiplex` draw single layers with HoloViews
+(``pip install infoflow[plot]``).

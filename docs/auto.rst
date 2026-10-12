@@ -19,6 +19,8 @@ Any :class:`~infoflow.selection.SkeletonSettings` field or
 :func:`~infoflow.infer_multiplex` parameter can be pinned as a keyword argument
 (``estimator`` pins the selection estimator; ``layer_estimator`` the layers'
 estimator); pinned values are used as given and never changed by the budget.
+The machine layer (:doc:`machines`) is off in every preset; ``machines=True`` pins it,
+so it runs outside the budget and is recorded in ``result.report.machines``.
 
 Pipeline
 --------

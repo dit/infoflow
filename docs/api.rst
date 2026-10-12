@@ -45,6 +45,12 @@ Nodes and interpretation
 .. automodule:: infoflow.contemporaneous
 .. automodule:: infoflow.hyperedges
 
+Machines
+--------
+
+.. automodule:: infoflow.machines
+.. automodule:: infoflow.network_model
+
 Transfer entropy and tests
 --------------------------
 
@@ -60,6 +66,7 @@ Comparison and workflow
 .. automodule:: infoflow.checkpoint
 .. automodule:: infoflow.io
 .. automodule:: infoflow.plot
+.. automodule:: infoflow.draw
 
 Example processes and benchmarks
 --------------------------------
