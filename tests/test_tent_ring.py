@@ -110,7 +110,7 @@ def regime(name):
             include_shared_candidates=False,
             machines=True,
             machine_settings=MachineSettings(
-                max_history=spec.get("max_history", 5), stability=name == "uncoupled", excess_entropy=False
+                max_history=int(spec.get("max_history", 5)), stability=name == "uncoupled", excess_entropy=False
             ),
             prng=0,
         )
