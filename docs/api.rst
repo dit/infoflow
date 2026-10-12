@@ -66,6 +66,7 @@ Comparison and workflow
 .. automodule:: infoflow.checkpoint
 .. automodule:: infoflow.io
 .. automodule:: infoflow.plot
+.. automodule:: infoflow.draw
 
 Example processes and benchmarks
 --------------------------------

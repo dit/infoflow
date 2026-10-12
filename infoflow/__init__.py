@@ -11,7 +11,7 @@ estimators and null generators of :mod:`dit.inference`.
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _version
 
-from . import benchmarks, datasets, preprocess
+from . import benchmarks, datasets, draw, preprocess
 from .auto import AutoReport, AutoResult, infer
 from .checkpoint import Checkpoint
 from .compare import NetworkComparison, compare_networks
