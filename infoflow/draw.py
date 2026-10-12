@@ -32,12 +32,19 @@ from .layers import LAYERS
 
 __all__ = ("LAYER_COLORS", "Scene", "draw", "node_positions", "save", "scene")
 
-#: Layer colours (ColorBrewer Dark2).
-LAYER_COLORS = {"intrinsic": "#1b9e77", "synergistic": "#d95f02", "shared": "#7570b3"}
+#: Layer colours (ColorBrewer Set1): red intrinsic, blue synergistic, green shared.
+LAYER_COLORS = {"intrinsic": "#e41a1c", "synergistic": "#377eb8", "shared": "#4daf4a"}
+LAYER_CMAPS = {"intrinsic": "Reds", "synergistic": "Blues", "shared": "Greens"}
 _NODE = "#f4f4f4"
 _INK = "#333333"
 _FAINT = "#b0b0b0"
-_HYPER = {"synergistic": "#d95f02", "redundant": "#7570b3", "unique-dominated": "#1b9e77", "mixed": "#888888"}
+# Hyperedge labels in the colour of the layer they resemble.
+_HYPER = {
+    "synergistic": LAYER_COLORS["synergistic"],
+    "redundant": LAYER_COLORS["shared"],
+    "unique-dominated": LAYER_COLORS["intrinsic"],
+    "mixed": "#888888",
+}
 NODE_RADIUS = 0.1
 
 
@@ -592,7 +599,7 @@ def _render_matrices(network, layers, significant_only, backend, common_scale=Fa
             panels.append(
                 hv.HeatMap(rows, kdims=["source", "target"], vdims=["bits"]).opts(
                     title=layer,
-                    cmap="Greens" if layer == "intrinsic" else "Oranges" if layer == "synergistic" else "Purples",
+                    cmap=LAYER_CMAPS.get(layer, "Greys"),
                     colorbar=True,
                     tools=["hover"],
                     width=300,
@@ -608,7 +615,7 @@ def _render_matrices(network, layers, significant_only, backend, common_scale=Fa
 
     fig, axes = plt.subplots(1, len(mats), figsize=(3.4 * len(mats), 3.2), squeeze=False)
     for a, (layer, w) in zip(axes[0], mats.items(), strict=True):
-        cmap = {"intrinsic": "Greens", "synergistic": "Oranges", "shared": "Purples"}.get(layer, "Greys")
+        cmap = LAYER_CMAPS.get(layer, "Greys")
         im = a.imshow(np.ma.masked_invalid(w.T), cmap=cmap, vmin=0, vmax=vmax)
         a.set_xticks(range(len(names)), names, rotation=90, fontsize=7)
         a.set_yticks(range(len(names)), names, fontsize=7)
