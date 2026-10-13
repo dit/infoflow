@@ -82,8 +82,8 @@ def contemporaneous_layer(data, skeleton, alpha=0.05, n_perm=200, prng=None, exc
     alpha : float
     n_perm : int
     prng : None, int, Generator
-    exchange : (values, pvalues), None
-        Precomputed :func:`instantaneous_exchange`, to reuse.
+    exchange : tuple, None
+        The ``(exchange, pvalues)`` pair from :func:`instantaneous_exchange`, to reuse.
 
     Returns
     -------
