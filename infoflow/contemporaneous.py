@@ -54,8 +54,10 @@ def instantaneous_exchange(data, skeleton, n_perm=200, prng=None):
 
     Returns
     -------
-    values, pvalues : np.ndarray
-        (processes, processes), symmetric; the diagonal is 0 and 1.
+    exchange : np.ndarray
+        (processes, processes) in bits, symmetric, zero on the diagonal.
+    pvalues : np.ndarray
+        Permutation p-values, symmetric, one on the diagonal.
     """
     rng = as_generator(prng)
     P = data.n_processes
