@@ -18,7 +18,7 @@ from dit.inference._symbols import as_generator
 
 from .selection import _cmi, _Columns
 
-__all__ = ("contemporaneous_layer", "run_tigramite", "to_tigramite")
+__all__ = ("contemporaneous_layer", "instantaneous_exchange", "run_tigramite", "to_tigramite")
 
 
 def _conditioning(skeleton, i, j):
@@ -43,7 +43,32 @@ def _test(data, i, j, cond, n_perm, rng):
     return value, float((1 + np.sum(null >= value - 1e-12)) / (1 + n_perm))
 
 
-def contemporaneous_layer(data, skeleton, alpha=0.05, n_perm=200, prng=None):
+def instantaneous_exchange(data, skeleton, n_perm=200, prng=None):
+    """
+    Instantaneous information exchange of every pair, with a permutation p-value.
+
+    :math:`I[X_t : Y_t \\mid \\text{both selected pasts and lagged parents}]`, the
+    causally conditioned instantaneous term of directed information
+    :cite:`Amblard2013`: in the bivariate case directed information is transfer
+    entropy plus this exchange. It is symmetric in the pair.
+
+    Returns
+    -------
+    values, pvalues : np.ndarray
+        (processes, processes), symmetric; the diagonal is 0 and 1.
+    """
+    rng = as_generator(prng)
+    P = data.n_processes
+    values = np.zeros((P, P))
+    pvalues = np.ones((P, P))
+    for i, j in combinations(range(P), 2):
+        v, p = _test(data, i, j, _conditioning(skeleton, i, j), n_perm, rng)
+        values[i, j] = values[j, i] = v
+        pvalues[i, j] = pvalues[j, i] = p
+    return values, pvalues
+
+
+def contemporaneous_layer(data, skeleton, alpha=0.05, n_perm=200, prng=None, exchange=None):
     """
     Contemporaneous links and their PC-style orientation.
 
@@ -55,6 +80,8 @@ def contemporaneous_layer(data, skeleton, alpha=0.05, n_perm=200, prng=None):
     alpha : float
     n_perm : int
     prng : None, int, Generator
+    exchange : (values, pvalues), None
+        Precomputed :func:`instantaneous_exchange`, to reuse.
 
     Returns
     -------
@@ -66,14 +93,8 @@ def contemporaneous_layer(data, skeleton, alpha=0.05, n_perm=200, prng=None):
     """
     rng = as_generator(prng)
     P = data.n_processes
-    values = np.zeros((P, P))
-    pvalues = np.ones((P, P))
-    adjacent = np.zeros((P, P), dtype=bool)
-    for i, j in combinations(range(P), 2):
-        v, p = _test(data, i, j, _conditioning(skeleton, i, j), n_perm, rng)
-        values[i, j] = values[j, i] = v
-        pvalues[i, j] = pvalues[j, i] = p
-        adjacent[i, j] = adjacent[j, i] = p <= alpha
+    values, pvalues = exchange if exchange is not None else instantaneous_exchange(data, skeleton, n_perm, rng)
+    adjacent = (pvalues <= alpha) & ~np.eye(P, dtype=bool)
     sepset = {}
     for i, j in combinations(range(P), 2):
         if not adjacent[i, j]:

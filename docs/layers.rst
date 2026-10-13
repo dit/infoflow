@@ -50,6 +50,34 @@ estimates and p-values are still reported. Conversely, a selected parent whose
 intrinsic and synergistic layers are both non-significant is flagged
 ``layers-unconfirmed``.
 
+Directed information
+--------------------
+
+Directed information :cite:`Massey1990`, with Kramer's causal conditioning
+:cite:`Kramer1998`, is the information-theoretic form of Granger causality. In the
+bivariate case it decomposes as :cite:`Amblard2013`
+
+.. math::
+
+   I[X \to Y] = T_{X \to Y} + I[X_t : Y_t \mid X_{\text{past}}, Y_{\text{past}}],
+
+transfer entropy (the dynamical part, which the layers above decompose further)
+plus the *instantaneous information exchange* (the contemporaneous part).
+``infer_multiplex(directed_information=True)`` adds, over ``(source, target)``:
+
+* ``iie``: the exchange of each pair, conditioned on both processes' selected pasts
+  and lagged parents (:func:`infoflow.contemporaneous.instantaneous_exchange`, the
+  statistic of the lag-0 layer), with a permutation p-value ``iie_pvalue``;
+* ``di = weight[te] + iie`` for each estimated edge.
+
+Because the transfer entropy conditions on the target's context and the exchange on
+both processes' lagged parents, ``di`` is a causally conditioned directed
+information. With side information the decomposition is only approximate:
+instantaneous coupling through a third process blurs it :cite:`Amblard2013`. On
+coarsely sampled data, where processes interact within a sample, ``iie`` carries
+influence that the lagged layers cannot see. With the machine layer the composed
+model's exact one-step directed information is added as ``model_di``.
+
 Validation
 ----------
 
