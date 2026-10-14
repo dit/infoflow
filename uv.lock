@@ -2452,8 +2452,8 @@ wheels = [
 
 [[package]]
 name = "sofic"
-version = "0.2.2.dev3+g5eee80478"
-source = { git = "https://github.com/dit/sofic?branch=main#5eee804786d1a13a1ed2774ac86f9c23ba3ef52d" }
+version = "0.2.2.dev34+g823741ebd"
+source = { git = "https://github.com/dit/sofic?branch=main#823741ebd24b4dfd175ef063be30655269ea0f33" }
 dependencies = [
     { name = "dit" },
     { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },

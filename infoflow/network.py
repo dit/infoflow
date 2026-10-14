@@ -244,6 +244,7 @@ def infer_multiplex(
     layer_symbols="preprocessed",
     machines=False,
     machine_settings=None,
+    directed_information=False,
     prng=None,
 ):
     """
@@ -325,6 +326,13 @@ def infer_multiplex(
         per node, an ε-transducer per edge and per target, and their composed model,
         as ``network.machines``. Needs sofic (``pip install 'infoflow[machines]'``).
     machine_settings : MachineSettings or dict, None
+    directed_information : bool
+        Add each pair's instantaneous information exchange ``iie`` (with
+        ``iie_pvalue``), :func:`~infoflow.contemporaneous.instantaneous_exchange`, and
+        each edge's directed information ``di = weight[te] + iie`` over
+        ``(source, target)``: the bivariate decomposition of directed information into
+        transfer entropy and instantaneous exchange :cite:`Massey1990,Amblard2013`.
+        ``di`` is NaN where the transfer entropy was not estimated.
     prng : None, int, Generator
 
     Returns
@@ -428,10 +436,20 @@ def infer_multiplex(
             ("source", "target"),
             latent_flags(estimation_data, skeleton, edges_run, dataset, embeddings, shared_kind, prng=rng),
         )
+    exchange = None
+    if directed_information:
+        from .contemporaneous import instantaneous_exchange
+
+        exchange = instantaneous_exchange(estimation_data, skeleton, prng=rng)
+        iie, iie_p = exchange
+        te = dataset["weight"].sel(layer="te").values
+        dataset["iie"] = (("source", "target"), iie)
+        dataset["iie_pvalue"] = (("source", "target"), iie_p)
+        dataset["di"] = (("source", "target"), te + iie)
     if contemporaneous:
         from .contemporaneous import contemporaneous_layer
 
-        graph, values, _ = contemporaneous_layer(estimation_data, skeleton, alpha=alpha, prng=rng)
+        graph, values, _ = contemporaneous_layer(estimation_data, skeleton, alpha=alpha, prng=rng, exchange=exchange)
         dataset["contemporaneous"] = (("source", "target"), graph)
         dataset["contemporaneous_cmi"] = (("source", "target"), values)
     pid = None
@@ -458,6 +476,7 @@ def infer_multiplex(
         "node_layer": node_layer,
         "interpret": interpret,
         "contemporaneous": contemporaneous,
+        "directed_information": directed_information,
         "hyperedges": hyperedges,
         "layer_symbols": layer_symbols,
         "hyperedge_measure": str(hyperedge_measure),

@@ -449,8 +449,9 @@ class NetworkModel:
         Returns
         -------
         dict
-            ``(source, target) -> {te, tdmi, intrinsic, synergistic, shared}`` in bits,
-            from :mod:`sofic.generators.directional_flow`.
+            ``(source, target) -> {te, tdmi, intrinsic, synergistic, shared, di}`` in bits,
+            from :mod:`sofic.generators.directional_flow`; ``di`` is the one-step
+            directed information, transfer entropy plus instantaneous exchange.
         """
         from sofic.generators import directional_flow as flow
 
@@ -462,12 +463,15 @@ class NetworkModel:
             te = flow.transfer_entropy(pair, history=h)
             intrinsic = flow.intrinsic_information_flow(pair, history=h)
             shared = flow.shared_information_flow(pair, history=h)
+            # The last term of I(X^{h+1} -> Y^{h+1}): I[Y_h : X_{0..h} | Y_{0..h-1}], TE + exchange.
+            di = flow.directed_information(pair, length=h + 1) - flow.directed_information(pair, length=h)
             results[(src, tgt)] = {
                 "te": te,
                 "tdmi": shared + intrinsic,
                 "intrinsic": intrinsic,
                 "synergistic": te - intrinsic,
                 "shared": shared,
+                "di": di,
             }
         return results
 
@@ -489,7 +493,7 @@ class NetworkModel:
         except ValueError as err:
             return str(err)
         P = len(names)
-        for layer in ("te", "tdmi", "intrinsic", "synergistic", "shared"):
+        for layer in ("te", "tdmi", "intrinsic", "synergistic", "shared", "di"):
             values = np.full((P, P), np.nan)
             for (src, tgt), f in flows.items():
                 values[names.index(src), names.index(tgt)] = f[layer]
