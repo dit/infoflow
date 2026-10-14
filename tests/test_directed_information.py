@@ -60,7 +60,8 @@ def test_exchange_matches_the_lag0_layer():
 
 
 def test_model_di_is_te_for_a_lagged_channel():
-    pytest.importorskip("sofic.inference")
+    if not hasattr(pytest.importorskip("sofic.inference"), "Trials"):
+        pytest.skip("needs sofic with multi-trial CSSR (sofic.inference.Trials)")
     from infoflow.machines import MachineSettings
 
     net = infer_multiplex(
