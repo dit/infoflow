@@ -139,8 +139,8 @@ class MachineLayer:
         minus the network's ``weight[te]``), ``edge_n_symbols``, ``edge_stability``,
         and ``admitted_by`` (the selection estimators that admitted the source). With
         the composed model, ``model_te``, ``model_tdmi``, ``model_intrinsic``,
-        ``model_synergistic``, ``model_shared``: the exact flows of
-        :class:`~infoflow.network_model.NetworkModel`.
+        ``model_synergistic``, ``model_shared``, ``model_di``: the exact flows (and
+        one-step directed information) of :class:`~infoflow.network_model.NetworkModel`.
     nodes : dict
         ``name -> EpsilonMachine``.
     edges : dict

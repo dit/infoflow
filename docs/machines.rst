@@ -126,7 +126,8 @@ are well defined (a delayed parent is read from a shift register).
   seen through a partition) violate this, and their nodes are flagged.
 * When the explicit model has at most ``max_composed_states`` states, its exact flows
   per edge (``model_te``, ``model_intrinsic``, ``model_synergistic``, ``model_shared``,
-  ``model_tdmi``) are added beside the estimated layers. Larger models still simulate
+  ``model_tdmi``, and the one-step directed information ``model_di``) are added beside
+  the estimated layers. Larger models still simulate
   and score, and the reason is recorded in ``machines.skipped``.
 * :meth:`~infoflow.network_model.NetworkModel.parametric_check` simulates surrogate
   trials, re-infers the network, and compares it with the original

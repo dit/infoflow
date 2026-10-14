@@ -1,0 +1,290 @@
+{
+  "tent_weak": {
+    "lag": 2,
+    "K": 2,
+    "infoflow": {
+      "precision": 0.5,
+      "recall": 1.0,
+      "n_found": 10,
+      "n_true": 5,
+      "seconds": 16.49764316700748
+    },
+    "dig": {
+      "precision": 0.625,
+      "recall": 1.0,
+      "n_found": 8,
+      "n_true": 5,
+      "seconds": 0.4471133750048466
+    },
+    "ocse": {
+      "precision": 0.5,
+      "recall": 1.0,
+      "n_found": 10,
+      "n_true": 5,
+      "seconds": 1.2360827090014936
+    },
+    "pairwise_di": {
+      "precision": 0.45454545454545453,
+      "recall": 1.0,
+      "n_found": 11,
+      "n_true": 5,
+      "seconds": 0.7465275830036262
+    }
+  },
+  "tent_moderate": {
+    "lag": 2,
+    "K": 2,
+    "infoflow": {
+      "precision": 0.4166666666666667,
+      "recall": 1.0,
+      "n_found": 12,
+      "n_true": 5,
+      "seconds": 24.10773750000226
+    },
+    "dig": {
+      "precision": 0.625,
+      "recall": 1.0,
+      "n_found": 8,
+      "n_true": 5,
+      "seconds": 0.47226491699984763
+    },
+    "ocse": {
+      "precision": 0.4166666666666667,
+      "recall": 1.0,
+      "n_found": 12,
+      "n_true": 5,
+      "seconds": 1.4200135839928407
+    },
+    "pairwise_di": {
+      "precision": 0.4166666666666667,
+      "recall": 1.0,
+      "n_found": 12,
+      "n_true": 5,
+      "seconds": 0.7717180409963476
+    }
+  },
+  "tent_moderate_lag1": {
+    "lag": 1,
+    "K": 2,
+    "infoflow": {
+      "precision": 0.4166666666666667,
+      "recall": 1.0,
+      "n_found": 12,
+      "n_true": 5,
+      "seconds": 16.74630470899865
+    },
+    "dig": {
+      "precision": 0.5,
+      "recall": 0.8,
+      "n_found": 8,
+      "n_true": 5,
+      "seconds": 0.5649785830028122
+    },
+    "ocse": {
+      "precision": 0.4166666666666667,
+      "recall": 1.0,
+      "n_found": 12,
+      "n_true": 5,
+      "seconds": 1.686145250001573
+    },
+    "pairwise_di": {
+      "precision": 0.4166666666666667,
+      "recall": 1.0,
+      "n_found": 12,
+      "n_true": 5,
+      "seconds": 0.8458906250016298
+    }
+  },
+  "eca90": {
+    "lag": 1,
+    "K": 2,
+    "infoflow": {
+      "precision": 0.9230769230769231,
+      "recall": 1.0,
+      "n_found": 13,
+      "n_true": 12,
+      "seconds": 20.908620333008002
+    },
+    "dig": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "n_found": 12,
+      "n_true": 12,
+      "seconds": 0.7709226250008214
+    },
+    "ocse": {
+      "precision": 0.2857142857142857,
+      "recall": 0.16666666666666666,
+      "n_found": 7,
+      "n_true": 12,
+      "seconds": 1.4437998329958646
+    },
+    "pairwise_di": {
+      "precision": 0.25,
+      "recall": 0.16666666666666666,
+      "n_found": 8,
+      "n_true": 12,
+      "seconds": 2.018857000002754
+    }
+  },
+  "eca110": {
+    "lag": 1,
+    "K": 2,
+    "infoflow": {
+      "precision": 0.9230769230769231,
+      "recall": 1.0,
+      "n_found": 13,
+      "n_true": 12,
+      "seconds": 21.29752137498872
+    },
+    "dig": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "n_found": 12,
+      "n_true": 12,
+      "seconds": 0.754807916993741
+    },
+    "ocse": {
+      "precision": 0.8571428571428571,
+      "recall": 1.0,
+      "n_found": 14,
+      "n_true": 12,
+      "seconds": 2.0605460000078892
+    },
+    "pairwise_di": {
+      "precision": 0.46153846153846156,
+      "recall": 1.0,
+      "n_found": 26,
+      "n_true": 12,
+      "seconds": 1.986119042005157
+    }
+  },
+  "var10_rep0": {
+    "lag": 1,
+    "K": 3,
+    "infoflow": {
+      "precision": 0.9333333333333333,
+      "recall": 0.8235294117647058,
+      "n_found": 15,
+      "n_true": 17,
+      "seconds": 13.563788041996304
+    },
+    "dig": {
+      "precision": 0.6521739130434783,
+      "recall": 0.8823529411764706,
+      "n_found": 23,
+      "n_true": 17,
+      "seconds": 0.5667923750006594
+    },
+    "ocse": {
+      "precision": 0.7142857142857143,
+      "recall": 0.8823529411764706,
+      "n_found": 21,
+      "n_true": 17,
+      "seconds": 0.869475583996973
+    },
+    "pairwise_di": {
+      "precision": 0.3469387755102041,
+      "recall": 1.0,
+      "n_found": 49,
+      "n_true": 17,
+      "seconds": 1.5831820830062497
+    }
+  },
+  "var10_rep1": {
+    "lag": 1,
+    "K": 3,
+    "infoflow": {
+      "precision": 0.9333333333333333,
+      "recall": 0.875,
+      "n_found": 15,
+      "n_true": 16,
+      "seconds": 13.99215729199932
+    },
+    "dig": {
+      "precision": 0.5416666666666666,
+      "recall": 0.8125,
+      "n_found": 24,
+      "n_true": 16,
+      "seconds": 0.5674782919959398
+    },
+    "ocse": {
+      "precision": 0.8333333333333334,
+      "recall": 0.9375,
+      "n_found": 18,
+      "n_true": 16,
+      "seconds": 0.7875970409950241
+    },
+    "pairwise_di": {
+      "precision": 0.5517241379310345,
+      "recall": 1.0,
+      "n_found": 29,
+      "n_true": 16,
+      "seconds": 1.6228595419961493
+    }
+  },
+  "logistic10_rep0": {
+    "lag": 1,
+    "K": 3,
+    "infoflow": {
+      "precision": 0.8421052631578947,
+      "recall": 0.9411764705882353,
+      "n_found": 19,
+      "n_true": 17,
+      "seconds": 20.423561457995675
+    },
+    "dig": {
+      "precision": 0.625,
+      "recall": 0.8823529411764706,
+      "n_found": 24,
+      "n_true": 17,
+      "seconds": 0.5633604589966126
+    },
+    "ocse": {
+      "precision": 0.8421052631578947,
+      "recall": 0.9411764705882353,
+      "n_found": 19,
+      "n_true": 17,
+      "seconds": 0.8190799589938251
+    },
+    "pairwise_di": {
+      "precision": 0.85,
+      "recall": 1.0,
+      "n_found": 20,
+      "n_true": 17,
+      "seconds": 1.541560291996575
+    }
+  },
+  "logistic10_rep1": {
+    "lag": 1,
+    "K": 3,
+    "infoflow": {
+      "precision": 0.7619047619047619,
+      "recall": 1.0,
+      "n_found": 21,
+      "n_true": 16,
+      "seconds": 27.355710749994614
+    },
+    "dig": {
+      "precision": 0.56,
+      "recall": 0.875,
+      "n_found": 25,
+      "n_true": 16,
+      "seconds": 0.565628457989078
+    },
+    "ocse": {
+      "precision": 0.6153846153846154,
+      "recall": 1.0,
+      "n_found": 26,
+      "n_true": 16,
+      "seconds": 1.1099401249957737
+    },
+    "pairwise_di": {
+      "precision": 0.7619047619047619,
+      "recall": 1.0,
+      "n_found": 21,
+      "n_true": 16,
+      "seconds": 1.5666935409972211
+    }
+  }
+}

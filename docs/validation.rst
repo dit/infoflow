@@ -137,3 +137,45 @@ target on one machine. An earlier run at significance 0.01, before that correcti
 and with the pair search at 0.05, recovered every one of the 41 true links into 20
 sampled logistic-map targets with one false link (precision 0.98, recall 1.00) in
 202 minutes.
+
+Directed-information baselines
+------------------------------
+
+``validation/run_di.sh`` compares parent selection with three classic
+directed-information structure learners on networks of known structure, all on the
+same integer symbols and the same fixed lag grid (``max_lag = max_source_lag = L``):
+pairwise directed information (pairwise transfer entropy, Benjamini--Hochberg over
+pairs); the directed information graph with in-degree at most :math:`K`
+:cite:`Quinn2015`, an exhaustive search per target for the parent set maximizing
+causally conditioned directed information, each member then tested given the others;
+and optimal causation entropy :cite:`Sun2015`, greedy forward discovery and backward
+removal. Continuous series are cut into 3 equal-frequency bins. Results in
+``validation/results/di/``. Precision / recall of the selected parents (random
+networks: mean over 2 graphs, ``mean_in_degree=2``, lag-1 links, 5000 samples):
+
+=========================  ==  ==  ===========  ===========  ===========  ===========
+Network                    L   K   infoflow     DIG          oCSE         pairwise DI
+=========================  ==  ==  ===========  ===========  ===========  ===========
+tent ring, weak            2   2   0.50 / 1.00  0.62 / 1.00  0.50 / 1.00  0.45 / 1.00
+tent ring, moderate        2   2   0.42 / 1.00  0.62 / 1.00  0.42 / 1.00  0.42 / 1.00
+tent ring, moderate        1   2   0.42 / 1.00  0.50 / 0.80  0.42 / 1.00  0.42 / 1.00
+noisy ECA, rule 90         1   2   0.92 / 1.00  1.00 / 1.00  0.29 / 0.17  0.25 / 0.17
+noisy ECA, rule 110        1   2   0.92 / 1.00  1.00 / 1.00  0.86 / 1.00  0.46 / 1.00
+VAR, 10 nodes (2)          1   3   0.93 / 0.85  0.60 / 0.85  0.77 / 0.91  0.45 / 1.00
+logistic, 10 nodes (2)     1   3   0.80 / 0.97  0.59 / 0.88  0.73 / 0.97  0.81 / 1.00
+=========================  ==  ==  ===========  ===========  ===========  ===========
+
+* **Synergy.** Rule 90 (:math:`l \oplus r`) is pure synergy: each neighbour alone
+  carries no information, so greedy oCSE and pairwise directed information miss the
+  edges. The directed information graph finds them by searching parent *sets*, and
+  infoflow by its synergy-aware pair search.
+* **Prior in-degree.** The directed information graph is exact on the automata
+  because :math:`K` equals their true in-degree, and its cap of :math:`K` parents per
+  target bounds its false links on the tent ring. On the random networks, whose
+  in-degrees vary, :math:`K = 3` admits spurious third parents and its precision
+  drops below infoflow's.
+* **Coarse symbols.** On the tent ring every method links the two-step paths and the
+  siblings: the binary generating partition does not screen off the maps' continuous
+  state, which no choice of conditioning set repairs.
+* **Cost.** The baselines take one or two seconds per network; infoflow takes 15--30
+  seconds, for its omnibus, minimum, and sequential tests and the layer estimates.
