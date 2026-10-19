@@ -147,7 +147,7 @@ known-first-party = ["infoflow"]
 python-version = "3.12"
 
 [tool.ty.analysis]
-allowed-unresolved-imports = ["dask", "dask.**", "holoviews", "holoviews.**", "matplotlib", "matplotlib.**", "tigramite", "tigramite.**", "sofic", "sofic.**", "torch", "torch.**"]
+allowed-unresolved-imports = ["dask", "dask.**", "holoviews", "holoviews.**", "matplotlib", "matplotlib.**", "tigramite", "tigramite.**", "pymc", "pymc.**", "sofic", "sofic.**", "torch", "torch.**"]
 
 [tool.ty.rules]
 unresolved-import = "error"
