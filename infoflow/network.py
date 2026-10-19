@@ -39,8 +39,9 @@ class MultiplexNetwork:
         Edge variables over dimensions (layer, source, target): ``weight``,
         ``ci_low``, ``ci_high``, ``pvalue``, ``qvalue``, ``significant``; edge
         variables over (source, target): ``kind`` (``"parent"``,
-        ``"shared_candidate"``, or ``""``), ``delay``, ``n_samples``, ``omnibus_pvalue``;
-        and node variables over (node,).
+        ``"shared_candidate"``, or ``""``), ``delay``, ``n_samples``, ``score`` (the
+        skeleton's ``source_scores``, NaN unless ``SkeletonSettings(edge_scores=True)``);
+        and node variables over (node,), such as ``omnibus_pvalue``.
     skeleton : dict
         ``target -> TargetSkeleton``.
     edges : dict
@@ -514,8 +515,11 @@ def _assemble(data, names, skeleton, results, alpha, fdr_dependent):
     delay = np.zeros((P, P), dtype=np.int64)
     n_samples = np.zeros((P, P), dtype=np.int64)
     omnibus = np.full(P, np.nan)
+    score = np.full((P, P), np.nan)
     for t, sk in skeleton.items():
         omnibus[t] = sk.omnibus_pvalue if sk.sources else np.nan
+        for s, value in sk.source_scores.items():
+            score[s, t] = value
     for (s, t), (stats, d, k) in results.items():
         flow = stats.flow.as_dict()
         for i, layer in enumerate(EDGE_LAYERS):
@@ -554,6 +558,7 @@ def _assemble(data, names, skeleton, results, alpha, fdr_dependent):
             "kind": (("source", "target"), kind.astype(str)),
             "delay": (("source", "target"), delay),
             "n_samples": (("source", "target"), n_samples),
+            "score": (("source", "target"), score),
             "omnibus_pvalue": (("node",), omnibus),
         },
         coords={**coords, "node": names},

@@ -40,5 +40,7 @@ and false-discovery-rate control.
    benchmarks
    discretization
    validation
+   methods
+   literature
    api
    zreferences

@@ -70,6 +70,13 @@ class SkeletonSettings:
     on what is conditioned on, so a redundant proxy for the target's own past (such
     as a child of the target) is not mistaken for a parent.
 
+    ``estimator='mixed'`` is KSG for mixed continuous and categorical series: the
+    processes in ``mixed_categorical`` (default: raw series with at most
+    ``mixed_max_categories`` integer values) only ever match within a category, so they
+    act as conditions rather than numbers, and tied neighbours are counted as in
+    :cite:`Mesner2021`; this is the variant :cite:`Popescu2025` found most robust. It
+    takes the KSG options (``ksg_k``, ``ksg_threads``, ``ksg_null``).
+
     ``estimator='gaussian'`` selects parents with the linear-Gaussian conditional mutual
     information on the raw values (log-ratio of regression residual variances, equal to
     Granger causality for Gaussian processes :cite:`Barnett2009`), as IDTxl does for
@@ -104,6 +111,13 @@ class SkeletonSettings:
     continuously removes its influence exactly, where bins leave a residue inside
     each bin that can hide weak edges; the layers are still estimated on symbols.
     It is much slower.
+
+    ``edge_scores`` adds a continuous score for every candidate source process,
+    :attr:`TargetSkeleton.source_scores`, for rank metrics such as AUROC and AUPRC
+    :cite:`Cheng2024,Stein2025`: the conditional transfer entropy of the source's best
+    lag given the target's selected past and the other processes' selected sources,
+    minus its mean over ``n_perm_scores`` permutations, so that sources with different
+    plug-in biases are comparable. With an ensemble, the first estimator scores.
     """
 
     n_perm_max_stat: int = 200
@@ -141,14 +155,18 @@ class SkeletonSettings:
     ksg_k: int = 4
     ksg_threads: int | None = None
     ksg_null: str = "local"
+    mixed_categorical: tuple | None = None
+    mixed_max_categories: int = 10
     curtail: bool | None = None
     curtail_batch: int = 20
     prescreen_alpha: float | None = None
     n_perm_prescreen: int = 100
+    edge_scores: bool = False
+    n_perm_scores: int = 20
     device: str | None = None
 
     def check(self):
-        valid = ("plugin", "ksg", "adaptive", "gaussian", "trend", "coarse")
+        valid = ("plugin", "ksg", "mixed", "adaptive", "gaussian", "trend", "coarse")
         ensembles = [self.estimator, *(self.target_estimators or {}).values()]
         k = 1
         for estimator in ensembles:
@@ -192,6 +210,7 @@ class TargetSkeleton:
     n_samples: int = 0
     admitted_by: dict = field(default_factory=dict)
     timing: dict = field(default_factory=dict)
+    source_scores: dict = field(default_factory=dict)
 
     def parents(self):
         """
@@ -672,32 +691,7 @@ class _KsgColumns:
         key = ("neighbors", z.shape, hash(z.tobytes()))
         if key not in self._contexts:
             self._contexts[key] = KDTree(z).query(z, k_perm, p=np.inf, workers=-1)[1].reshape(self.n, -1)
-        neighbors = self._contexts[key]
-        n, k = neighbors.shape
-        # Each sample proposes its neighbours in a random order; a neighbour proposed by
-        # several samples goes to the one with the highest random priority, and samples
-        # left without a free neighbour after k rounds reuse their first proposal.
-        order = np.argsort(rng.random((n, k)), axis=1)
-        shuffled = np.take_along_axis(neighbors, order, axis=1)
-        priority = rng.random(n)
-        choice = np.full(n, -1, dtype=np.int64)
-        used = np.zeros(n, dtype=bool)
-        for r in range(k):
-            pending = np.flatnonzero(choice < 0)
-            if not len(pending):
-                break
-            proposal = shuffled[pending, r]
-            free = ~used[proposal]
-            pending, proposal = pending[free], proposal[free]
-            ranked = np.lexsort((-priority[pending], proposal))
-            first = np.ones(len(ranked), dtype=bool)
-            first[1:] = proposal[ranked][1:] != proposal[ranked][:-1]
-            winners = ranked[first]
-            choice[pending[winners]] = proposal[winners]
-            used[proposal[winners]] = True
-        left = choice < 0
-        choice[left] = shuffled[left, 0]
-        return choice
+        return _local_assignment(self._contexts[key], rng)
 
     def joint(self, variables):
         cols = [self.index[v] for v in variables]
@@ -742,6 +736,140 @@ class _KsgColumns:
             value = digamma(k) - np.mean(digamma(n_xz) + digamma(n_yz) - digamma(count(z_tree, z)))
         # Not clipped at zero: KSG is biased downward in high dimensions, and clipping
         # would tie weak true effects with the many null values clipped to zero.
+        return float(value) / np.log(2)
+
+
+def _local_assignment(neighbors, rng):
+    """
+    A permutation in which each sample takes a distinct one of its `neighbors` where possible.
+    """
+    n, k = neighbors.shape
+    # Each sample proposes its neighbours in a random order; a neighbour proposed by
+    # several samples goes to the one with the highest random priority, and samples
+    # left without a free neighbour after k rounds reuse their first proposal.
+    order = np.argsort(rng.random((n, k)), axis=1)
+    shuffled = np.take_along_axis(neighbors, order, axis=1)
+    priority = rng.random(n)
+    choice = np.full(n, -1, dtype=np.int64)
+    used = np.zeros(n, dtype=bool)
+    for r in range(k):
+        pending = np.flatnonzero(choice < 0)
+        if not len(pending):
+            break
+        proposal = shuffled[pending, r]
+        free = ~used[proposal]
+        pending, proposal = pending[free], proposal[free]
+        ranked = np.lexsort((-priority[pending], proposal))
+        first = np.ones(len(ranked), dtype=bool)
+        first[1:] = proposal[ranked][1:] != proposal[ranked][:-1]
+        winners = ranked[first]
+        choice[pending[winners]] = proposal[winners]
+        used[proposal[winners]] = True
+    left = choice < 0
+    choice[left] = shuffled[left, 0]
+    return choice
+
+
+class _MixedColumns(_KsgColumns):
+    """
+    Nearest-neighbour CMI for mixed continuous and categorical variables.
+
+    Categorical processes (declared, or detected as raw series with at most
+    `max_categories` integer values) enter the max-norm with an effectively infinite
+    distance between different categories and zero distance within one, so every
+    neighbourhood stays inside one category and categorical variables act as
+    conditions rather than numbers, the variant :cite:`Popescu2025` found most robust.
+    Ties are handled as by :cite:`Mesner2021`: where a point's :math:`k`-th neighbour
+    distance is zero (every coordinate ties), its neighbour count is the number of
+    tied points and the marginal counts are of exact ties; elsewhere counts are
+    strictly inside the distance, as in KSG.
+    """
+
+    SEPARATION = 1e6
+
+    def __init__(
+        self, data, target, variables, max_lag, k=4, threads=None, prng=None, categorical=None, max_categories=10
+    ):
+        super().__init__(data, target, variables, max_lag, k=k, threads=threads, prng=prng)
+        pooled = np.concatenate(data.raw)
+        if categorical is None:
+            categorical = [
+                p
+                for p in range(pooled.shape[1])
+                if np.all(pooled[:, p] == np.round(pooled[:, p])) and len(np.unique(pooled[:, p])) <= max_categories
+            ]
+        self.categorical = {int(p) for p in categorical}
+        trial, time = self.r.trial, self.r.time
+
+        def code(p, values):
+            lookup = {v: i for i, v in enumerate(np.unique(pooled[:, p]))}
+            return np.array([lookup[v] for v in values], dtype=float) * self.SEPARATION
+
+        if target in self.categorical:
+            self.y = code(target, np.array([data.raw[i][j, target] for i, j in zip(trial, time, strict=True)]))
+        for col, (p, lag) in enumerate(self.variables):
+            if p in self.categorical:
+                raw = np.array([data.raw[i][j - lag, p] for i, j in zip(trial, time, strict=True)])
+                self._values[:, col] = code(p, raw)
+
+    def local_permutation(self, z, rng, k_perm=5):
+        """
+        Runge's local permutation :cite:`Runge2018` within each combination of the
+        categorical conditions: a free permutation where the conditions are all
+        categorical, nearest neighbours in the continuous ones otherwise (tied
+        categorical coordinates would make the plain neighbour search degenerate).
+        """
+        from scipy.spatial import KDTree
+
+        z = np.asarray(z, dtype=float).reshape(self.n, -1)
+        if z.shape[1] == 0:
+            return rng.permutation(self.n)
+        key = ("strata", z.shape, hash(z.tobytes()))
+        if key not in self._contexts:
+            cat = np.all(np.mod(z, self.SEPARATION) == 0, axis=0)
+            if cat.any():
+                _, stratum = np.unique(z[:, cat], axis=0, return_inverse=True)
+                stratum = stratum.ravel()
+            else:
+                stratum = np.zeros(self.n, dtype=np.int64)
+            plan = []
+            for s in np.unique(stratum):
+                g = np.flatnonzero(stratum == s)
+                local = None
+                if (~cat).any() and len(g) > k_perm:
+                    local = KDTree(z[g][:, ~cat]).query(z[g][:, ~cat], k_perm, p=np.inf)[1].reshape(len(g), -1)
+                plan.append((g, local))
+            self._contexts[key] = plan
+        out = np.arange(self.n)
+        for g, local in self._contexts[key]:
+            out[g] = g[rng.permutation(len(g)) if local is None else _local_assignment(local, rng)]
+        return out
+
+    def cmi(self, c, Kc, z, Kz):
+        """
+        Mixed-data :math:`I[Y : c \\mid z]` in bits.
+        """
+        from scipy.spatial import KDTree
+        from scipy.special import digamma
+
+        c = np.asarray(c, dtype=float).reshape(self.n, -1)
+        z = np.asarray(z, dtype=float).reshape(self.n, -1)
+        yz, yz_tree, z_tree = self._context(z)
+        xyz = np.column_stack([c, yz])
+        xyz_tree = KDTree(xyz)
+        rho = xyz_tree.query(xyz, self.k + 1, p=np.inf)[0][:, -1]
+        tied = rho == 0
+        # Strictly inside rho where it is positive (KSG); exact ties where it is zero.
+        radius = np.where(tied, 0.0, np.nextafter(rho, 0))
+
+        def count(tree, points):
+            return tree.query_ball_point(points, radius, p=np.inf, return_length=True)
+
+        k_tilde = np.where(tied, count(xyz_tree, xyz) - 1, self.k)
+        xz = np.column_stack([c, z])
+        n_xz, n_yz = count(KDTree(xz), xz), count(yz_tree, yz)
+        n_z = count(z_tree, z) if z_tree is not None else np.full(self.n, self.n)
+        value = np.mean(digamma(k_tilde) - digamma(n_xz) - digamma(n_yz) + digamma(n_z))
         return float(value) / np.log(2)
 
 
@@ -962,6 +1090,25 @@ def _individual(cols, variables, cond, v, idx=None, perm=None, n_perm=0):
     return cols.cmi(c, a, z, Kz)
 
 
+def _source_scores(cols, perm, candidates, base, selected, n_perm):
+    """
+    Per source process, the largest null-centered CMI over its lags given `base` and
+    the selected variables of the other processes.
+    """
+    scores = {}
+    for p in dict.fromkeys(v[0] for v in candidates):
+        z, Kz = cols.context(base + [v for v in selected if v[0] != p])
+        idx = [perm(z) for _ in range(n_perm)]
+        best = -np.inf
+        for v in (u for u in candidates if u[0] == p):
+            c, a = cols.column(v)
+            obs = cols.cmi(c, a, z, Kz)
+            center = float(np.mean(cols.cmi_batch(c, a, z, Kz, idx))) if n_perm else 0.0
+            best = max(best, obs - center)
+        scores[p] = float(best)
+    return scores
+
+
 def _per_source_nulls(cols, sources, cond, n_perm, perm):
     """
     Null CMIs ``(n_perm, len(sources))``: one permutation shared by all sources, or, for
@@ -1057,6 +1204,18 @@ def _estimators(settings, target=None):
 def _make_columns(name, data, target, everything, max_lag, settings, rng):
     if name == "ksg":
         cols = _KsgColumns(data, target, everything, max_lag, k=settings.ksg_k, threads=settings.ksg_threads, prng=rng)
+    elif name == "mixed":
+        cols = _MixedColumns(
+            data,
+            target,
+            everything,
+            max_lag,
+            k=settings.ksg_k,
+            threads=settings.ksg_threads,
+            prng=rng,
+            categorical=settings.mixed_categorical,
+            max_categories=settings.mixed_max_categories,
+        )
     elif name == "gaussian":
         cols = _GaussianColumns(data, target, everything, max_lag)
     elif name == "adaptive":
@@ -1107,7 +1266,7 @@ class _SingleStages:
         self.perm = perm
         self.settings = settings
         self.deb = settings.statistic == "debiased"
-        curtail = settings.curtail if settings.curtail is not None else name in ("ksg", "gaussian")
+        curtail = settings.curtail if settings.curtail is not None else name in ("ksg", "mixed", "gaussian")
         self.bt = settings.curtail_batch if curtail else None
         self.admitted = {}
 
@@ -1159,6 +1318,9 @@ class _SingleStages:
     def tdmi(self, candidates):
         s = self.settings
         return _max_statistic(self.cols, candidates, [], s.n_perm_tdmi, self.perm, self.deb, s.alpha_tdmi, self.bt)
+
+    def scores(self, candidates, base, selected):
+        return _source_scores(self.cols, self.perm, candidates, base, selected, self.settings.n_perm_scores)
 
 
 class _EnsembleStages:
@@ -1281,6 +1443,10 @@ class _EnsembleStages:
         s = self.settings
         return self._max(candidates, [], s.n_perm_tdmi, s.alpha_tdmi)[:3]
 
+    def scores(self, candidates, base, selected):
+        m = self.members[0]
+        return self._timed(m, m.scores, candidates, base, selected)
+
 
 def select_parents(data, target, embeddings=None, sources=None, settings=None, prng=None):
     """
@@ -1312,7 +1478,7 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     # lag budget in the network), on each source's own grid.
     source_max = settings.max_source_lag or max(5, _max_budget(embeddings, P))
     names = _estimators(settings, target)
-    if any(name in ("ksg", "gaussian") for name in names):
+    if any(name in ("ksg", "mixed", "gaussian") for name in names):
         # KSG resolves the target's own past finely enough that memory beyond the symbolic
         # lag budget matters; offer the target the source lag range (IDTxl's max_lag_target).
         target_cands = [(target, lag) for lag in _source_lags(data, embeddings, target, source_max)]
@@ -1383,6 +1549,8 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         result.sources = [v for v in selected if result.source_pvalues[v] <= settings.alpha_max_seq]
         result.significant = result.omnibus_pvalue <= settings.alpha_omnibus and bool(result.sources)
     result.admitted_by = {v: stages.admitted[v] for v in result.sources if v in stages.admitted}
+    if settings.edge_scores:
+        result.source_scores = stages.scores(all_source_cands, base, result.sources)
 
     if settings.tdmi_screen:
         parents = {p for p, _ in result.sources}

@@ -28,10 +28,14 @@ from .measures import cmi_from_joint, dense_codes, joint_table
 
 __all__ = (
     "conditioning_scaling",
+    "latent_validation",
+    "lorenz96_graph",
     "motif_validation",
     "network_validation",
     "random_network",
+    "rank_metrics",
     "scaling_data",
+    "score_edges",
     "score_network",
     "simulate_network",
 )
@@ -222,6 +226,27 @@ def random_network(n_nodes, mean_in_degree=3.0, max_lag=5, prng=None):
     return graph
 
 
+def lorenz96_graph(n_vars):
+    """
+    The ground-truth graph of :func:`~infoflow.datasets.lorenz96`: each variable's
+    parents are ``i - 2``, ``i - 1``, and ``i + 1`` on the ring, at lag 1 :cite:`Tank2022`.
+
+    Returns
+    -------
+    networkx.DiGraph
+    """
+    import networkx as nx
+
+    graph = nx.DiGraph()
+    graph.add_nodes_from(range(n_vars))
+    for i in range(n_vars):
+        for offset in (-2, -1, 1):
+            s = (i + offset) % n_vars
+            if s != i:
+                graph.add_edge(s, i, lag=1)
+    return graph
+
+
 def simulate_network(
     graph, n_samples, kind="var", self_coupling=0.5, cross_coupling=0.4, noise=0.1, burn_in=500, prng=None
 ):
@@ -273,46 +298,124 @@ def _edges(net, level, targets=None):
     return found
 
 
-def score_network(net, graph, levels=("skeleton", "intrinsic"), targets=None):
+def rank_metrics(score, truth):
     """
-    Precision, recall, specificity, and normalized lag error of an inferred network.
+    AUROC and AUPRC (average precision) of a continuous edge score.
 
-    The lag error is the mean absolute difference between true and inferred lags over
-    recalled links, divided by its value for two independent uniform lags on the
-    graph's lag range (:cite:`Novelli2019`), so 0 is perfect and 1 is chance. With
-    `targets`, only links into those targets are scored.
+    Rank-based scores do not depend on a significance threshold, so methods with
+    different thresholds can be compared :cite:`Cheng2024,Stein2025`. Missing scores
+    (NaN) rank below every observed score; ties share their average rank.
+
+    Parameters
+    ----------
+    score : array_like
+        One score per candidate link.
+    truth : array_like of bool
+        Whether each candidate link is real.
+
+    Returns
+    -------
+    tuple of float
+        ``(auroc, auprc)``; NaN if every score is missing or one class is empty.
+    """
+    from scipy.stats import rankdata
+
+    score = np.asarray(score, dtype=float)
+    truth = np.asarray(truth, dtype=bool)
+    n_pos, n_neg = int(truth.sum()), int((~truth).sum())
+    if not n_pos or not n_neg or np.all(np.isnan(score)):
+        return np.nan, np.nan
+    s = np.where(np.isnan(score), np.nanmin(score) - 1.0, score)
+    ranks = rankdata(s)
+    auroc = (ranks[truth].sum() - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg)
+    # Average precision with ties broken pessimistically (negatives first).
+    order = np.lexsort((truth, -s))
+    hits = np.cumsum(truth[order])
+    precision = hits / np.arange(1, len(s) + 1)
+    auprc = float(np.sum(precision[truth[order]]) / n_pos)
+    return float(auroc), auprc
+
+
+def score_edges(found, delay, score, graph, targets=None):
+    """
+    Score a set of inferred links against `graph`.
+
+    Parameters
+    ----------
+    found : set of (int, int)
+        Inferred ``(source, target)`` links.
+    delay : array_like, None
+        ``(source, target)`` inferred lags (for the lag error).
+    score : array_like, None
+        ``(source, target)`` continuous edge scores (for AUROC and AUPRC).
+    graph : networkx.DiGraph
+        Ground truth with a ``lag`` attribute per edge.
+    targets : iterable of int, None
+        Score only links into these targets.
 
     Returns
     -------
     dict
-        ``level -> {"precision", "recall", "specificity", "lag_error", "n_found"}``.
+        ``precision``, ``recall``, ``specificity``, ``lag_error``, ``auroc``, ``auprc``, ``n_found``.
     """
     n = graph.number_of_nodes()
     targets = set(range(n)) if targets is None else set(targets)
-    truth = {(s, t) for s, t in graph.edges() if t in targets}
-    lags = [d["lag"] for _, _, d in graph.edges(data=True)]
+    found = {e for e in found if e[1] in targets}
+    truth = {(s, t) for s, t in graph.edges() if t in targets and s != t}
+    lags = [d["lag"] for _, _, d in graph.edges(data=True) if "lag" in d]
     L = max(lags) if lags else 1
     chance = (L**2 - 1) / (3 * L) if L > 1 else 1.0
-    out = {}
-    for level in levels:
-        found = _edges(net, level, targets)
-        tp, fp = len(found & truth), len(found - truth)
-        fn = len(truth - found)
-        tn = len(targets) * (n - 1) - tp - fp - fn
-        recalled = sorted(found & truth)
-        delay = net.dataset["delay"].values
-        err = [abs(int(delay[s, t]) - graph.edges[s, t]["lag"]) for s, t in recalled]
-        out[level] = {
-            "precision": tp / (tp + fp) if tp + fp else np.nan,
-            "recall": tp / (tp + fn) if tp + fn else np.nan,
-            "specificity": tn / (tn + fp) if tn + fp else np.nan,
-            "lag_error": float(np.mean(err)) / chance if err else np.nan,
-            "n_found": len(found),
-        }
-    return out
+    tp, fp = len(found & truth), len(found - truth)
+    fn = len(truth - found)
+    tn = len(targets) * (n - 1) - tp - fp - fn
+    err = []
+    if delay is not None:
+        delay = np.asarray(delay)
+        err = [
+            abs(int(delay[s, t]) - graph.edges[s, t]["lag"])
+            for s, t in sorted(found & truth)
+            if "lag" in graph.edges[s, t]
+        ]
+    auroc = auprc = np.nan
+    if score is not None:
+        score = np.asarray(score, dtype=float)
+        pairs = [(s, t) for t in sorted(targets) for s in range(n) if s != t]
+        auroc, auprc = rank_metrics([score[s, t] for s, t in pairs], [p in truth for p in pairs])
+    return {
+        "precision": tp / (tp + fp) if tp + fp else np.nan,
+        "recall": tp / (tp + fn) if tp + fn else np.nan,
+        "specificity": tn / (tn + fp) if tn + fp else np.nan,
+        "lag_error": float(np.mean(err)) / chance if err else np.nan,
+        "auroc": auroc,
+        "auprc": auprc,
+        "n_found": len(found),
+    }
 
 
-METRICS = ("precision", "recall", "specificity", "lag_error", "n_found", "runtime")
+def score_network(net, graph, levels=("skeleton", "intrinsic"), targets=None):
+    """
+    Precision, recall, specificity, normalized lag error, AUROC, and AUPRC of an inferred network.
+
+    The lag error is the mean absolute difference between true and inferred lags over
+    recalled links, divided by its value for two independent uniform lags on the
+    graph's lag range (:cite:`Novelli2019`), so 0 is perfect and 1 is chance. AUROC
+    and AUPRC rank every candidate link by the dataset's ``score``
+    (``SkeletonSettings(edge_scores=True)``; NaN otherwise) and are the same for every
+    level (:func:`rank_metrics`). With `targets`, only links into those targets are scored.
+
+    Returns
+    -------
+    dict
+        ``level -> {"precision", "recall", "specificity", "lag_error", "auroc", "auprc", "n_found"}``.
+    """
+    ds = net.dataset
+    score = ds["score"].values if "score" in ds else None
+    return {
+        level: score_edges(_edges(net, level, targets), ds["delay"].values, score, graph, targets) for level in levels
+    }
+
+
+METRICS = ("precision", "recall", "specificity", "lag_error", "auroc", "auprc", "n_found", "runtime")
 
 
 def network_validation(
@@ -325,14 +428,26 @@ def network_validation(
     levels=("skeleton", "intrinsic"),
     infer_kwargs=None,
     n_targets=None,
+    methods=("infoflow",),
+    baseline_alpha=0.05,
+    edge_scores=True,
     prng=None,
 ):
     """
     Infer random networks of known structure and score them :cite:`Novelli2019`.
 
+    Every method sees the same graphs and simulations. Besides infoflow, `methods` may
+    name the baselines of :mod:`infoflow.baselines` (``'var'``, ``'pcmciplus'``,
+    ``'lpcmci'``), which a fair comparison needs: simple vector autoregression is often
+    the strongest method on real benchmarks :cite:`Stein2025`. Baselines have only
+    the ``skeleton`` level; their other levels are NaN.
+
     Parameters
     ----------
-    kind : {'var', 'logistic'}
+    kind : {'var', 'logistic', 'lorenz96'}
+        Novelli's random networks simulated as a VAR or coupled logistic maps, or the
+        Lorenz-96 ring (:func:`~infoflow.datasets.lorenz96`, forcing 10;
+        `mean_in_degree` and `max_lag` then do not shape the graph).
     n_nodes, n_samples : sequences of int
     n_reps : int
         Independent graphs and simulations per (size, length).
@@ -347,40 +462,177 @@ def network_validation(
     n_targets : int, None
         Infer and score only this many randomly chosen targets per network (links into
         them), which keeps slow estimators tractable on large networks.
+    methods : sequence of str
+        ``'infoflow'`` and/or baseline names.
+    baseline_alpha : float
+        Significance level of the baselines.
+    edge_scores : bool
+        Run infoflow with ``SkeletonSettings(edge_scores=True)`` so that its AUROC and
+        AUPRC are defined (at the cost of a few permutations per candidate).
     prng : None, int, Generator
 
     Returns
     -------
     xarray.Dataset
-        One variable per metric over (level, n_nodes, n_samples, rep).
+        One variable per metric over (algorithm, level, n_nodes, n_samples, rep);
+        the dimension is not called ``method``, which ``Dataset.sel`` reserves.
     """
-    from .network import infer_multiplex
+    import dataclasses
 
+    from .baselines import run_baseline
+    from .datasets import lorenz96
+    from .network import infer_multiplex
+    from .selection import SkeletonSettings
+
+    if kind not in ("var", "logistic", "lorenz96"):
+        raise ValueError("kind must be 'var', 'logistic', or 'lorenz96'")
     rng = as_generator(prng)
     kwargs = {"max_lag": max_lag, "interpret": False, "node_layer": False, **(infer_kwargs or {})}
-    shape = (len(levels), len(n_nodes), len(n_samples), n_reps)
+    if edge_scores:
+        kwargs["skeleton_settings"] = dataclasses.replace(
+            kwargs.get("skeleton_settings") or SkeletonSettings(), edge_scores=True
+        )
+    methods = list(methods)
+    shape = (len(methods), len(levels), len(n_nodes), len(n_samples), n_reps)
     values = {m: np.full(shape, np.nan) for m in METRICS}
     for i, N in enumerate(n_nodes):
         for j, T in enumerate(n_samples):
             for r in range(n_reps):
-                graph = random_network(N, mean_in_degree, max_lag, rng)
-                data = simulate_network(graph, T, kind, prng=rng)
+                if kind == "lorenz96":
+                    graph = lorenz96_graph(N)
+                    data = lorenz96(T, n_vars=N, seed=int(rng.integers(2**32)))
+                else:
+                    graph = random_network(N, mean_in_degree, max_lag, rng)
+                    data = simulate_network(graph, T, kind, prng=rng)
                 targets = None
                 if n_targets is not None and n_targets < N:
                     targets = sorted(int(t) for t in rng.choice(N, n_targets, replace=False))
-                t0 = time.perf_counter()
-                net = infer_multiplex(data, targets=targets, prng=int(rng.integers(2**32)), **kwargs)
-                elapsed = time.perf_counter() - t0
-                scores = score_network(net, graph, levels, targets)
-                for li, level in enumerate(levels):
-                    for m in METRICS[:-1]:
-                        values[m][li, i, j, r] = scores[level][m]
-                    values["runtime"][li, i, j, r] = elapsed
-    dims = ("level", "n_nodes", "n_samples", "rep")
+                seed = int(rng.integers(2**32))
+                for mi, method in enumerate(methods):
+                    t0 = time.perf_counter()
+                    if method == "infoflow":
+                        net = infer_multiplex(data, targets=targets, prng=seed, **kwargs)
+                        elapsed = time.perf_counter() - t0
+                        scores = score_network(net, graph, levels, targets)
+                    else:
+                        base = run_baseline(method, data, max_lag=max_lag, alpha=baseline_alpha)
+                        elapsed = time.perf_counter() - t0
+                        scores = {"skeleton": score_edges(base.found, base.lags, base.score, graph, targets)}
+                    for li, level in enumerate(levels):
+                        if level not in scores:
+                            continue
+                        for m in METRICS[:-1]:
+                            values[m][mi, li, i, j, r] = scores[level][m]
+                        values["runtime"][mi, li, i, j, r] = elapsed
+    dims = ("algorithm", "level", "n_nodes", "n_samples", "rep")
     return xr.Dataset(
         {m: (dims, v) for m, v in values.items()},
-        coords={"level": list(levels), "n_nodes": list(n_nodes), "n_samples": list(n_samples), "rep": range(n_reps)},
+        coords={
+            "algorithm": methods,
+            "level": list(levels),
+            "n_nodes": list(n_nodes),
+            "n_samples": list(n_samples),
+            "rep": range(n_reps),
+        },
         attrs={"kind": kind, "mean_in_degree": mean_in_degree, "max_lag": max_lag},
+    )
+
+
+LATENT_FLAGS = ("shared-dominant", "unexplained-tdmi", "zero-lag", "history-collider")
+LATENT_METRICS = ("precision", "recall", "spurious", "flagged", "n_confounded")
+
+
+def _hide(graph, n_hidden, rng):
+    import networkx as nx
+
+    drivers = [v for v in graph.nodes if graph.out_degree(v) >= 2]
+    if len(drivers) < n_hidden:
+        return None
+    hidden = sorted(int(v) for v in rng.choice(drivers, n_hidden, replace=False))
+    observed = [v for v in graph.nodes if v not in hidden]
+    index = {v: k for k, v in enumerate(observed)}
+    truth = nx.relabel_nodes(graph.subgraph(observed).copy(), index)
+    confounded = set()
+    for h in hidden:
+        children = [index[c] for c in graph.successors(h) if c in index]
+        for a in children:
+            for b in children:
+                if a != b and not truth.has_edge(a, b) and not truth.has_edge(b, a):
+                    confounded.add((a, b))
+    return observed, truth, confounded
+
+
+def latent_validation(
+    kind="var",
+    n_nodes=8,
+    n_hidden=1,
+    n_samples=3000,
+    n_reps=3,
+    mean_in_degree=2.0,
+    max_lag=3,
+    methods=("infoflow", "lpcmci"),
+    baseline_alpha=0.01,
+    infer_kwargs=None,
+    prng=None,
+):
+    """
+    How methods treat pairs confounded by an unobserved driver.
+
+    A random network :cite:`Novelli2019` is simulated, `n_hidden` nodes with at least
+    two children are removed from the data, and the induced graph over the observed
+    nodes is the truth. Ordered pairs of observed nodes that share a hidden parent
+    but have no link either way are *confounded*: a method should not report a link
+    there, and ideally it flags the confounding. infoflow flags it through
+    :func:`~infoflow.interpret.latent_flags` (any of :data:`LATENT_FLAGS`); LPCMCI
+    :cite:`Gerhardus2020` through a ``<->`` mark. The VAR and PCMCI+ baselines cannot
+    flag, so their ``flagged`` is NaN.
+
+    Returns
+    -------
+    xarray.Dataset
+        ``precision`` and ``recall`` (observed links), ``spurious`` (fraction of
+        confounded pairs reported as links), ``flagged`` (fraction flagged), and
+        ``n_confounded``, over (algorithm, rep).
+    """
+    from .baselines import run_baseline
+    from .network import infer_multiplex
+
+    rng = as_generator(prng)
+    kwargs = {"max_lag": max_lag, "node_layer": False, **(infer_kwargs or {}), "interpret": True}
+    methods = list(methods)
+    values = {m: np.full((len(methods), n_reps), np.nan) for m in LATENT_METRICS}
+    for r in range(n_reps):
+        for _ in range(100):
+            graph = random_network(n_nodes, mean_in_degree, max_lag, rng)
+            hidden = _hide(graph, n_hidden, rng)
+            if hidden is not None and hidden[2]:
+                break
+        else:
+            raise RuntimeError("no network with a confounding hidden driver was drawn")
+        observed, truth, confounded = hidden
+        data = simulate_network(graph, n_samples, kind, prng=rng)[:, observed]
+        seed = int(rng.integers(2**32))
+        for mi, method in enumerate(methods):
+            if method == "infoflow":
+                net = infer_multiplex(data, prng=seed, **kwargs)
+                found = _edges(net, "skeleton")
+                flags = net.dataset["flags"].values
+                flagged = [any(f in str(flags[a, b]).split(",") for f in LATENT_FLAGS) for a, b in confounded]
+                delay = net.dataset["delay"].values
+            else:
+                base = run_baseline(method, data, max_lag=max_lag, alpha=baseline_alpha)
+                found, delay = base.found, base.lags
+                flagged = [(a, b) in base.latent for a, b in confounded] if method == "lpcmci" else None
+            s = score_edges(found, delay, None, truth)
+            values["precision"][mi, r] = s["precision"]
+            values["recall"][mi, r] = s["recall"]
+            values["spurious"][mi, r] = np.mean([(a, b) in found for a, b in confounded])
+            values["flagged"][mi, r] = np.mean(flagged) if flagged is not None else np.nan
+            values["n_confounded"][mi, r] = len(confounded)
+    return xr.Dataset(
+        {m: (("algorithm", "rep"), v) for m, v in values.items()},
+        coords={"algorithm": methods, "rep": range(n_reps)},
+        attrs={"kind": kind, "n_nodes": n_nodes, "n_hidden": n_hidden, "n_samples": n_samples},
     )
 
 

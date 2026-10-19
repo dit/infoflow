@@ -11,9 +11,11 @@ __all__ = (
     "common_driver",
     "coupled_logistic",
     "coupled_tent",
+    "lorenz96",
     "mute_network",
     "noisy_eca",
     "orthogonal_features",
+    "switching_coupling",
     "tent_ring_coupling",
     "var_process",
     "xor_synergy",
@@ -154,6 +156,38 @@ def coupled_tent(n=2000, slopes=(1.9, 1.9), coupling=None, seed=None, burn_in=30
     return (x >= 0.5).astype(np.int64) if symbols else x
 
 
+def lorenz96(n=1000, n_vars=10, forcing=10.0, dt=0.1, substeps=10, noise_std=0.1, seed=None, burn_in=200):
+    """
+    The Lorenz-96 system :cite:`Lorenz1996`, the standard nonlinear benchmark of the
+    neural Granger-causality literature :cite:`Tank2022`.
+
+    :math:`\\dot x_i = (x_{i+1} - x_{i-2}) x_{i-1} - x_i + F` on a ring, integrated by
+    fourth-order Runge--Kutta with `substeps` steps per sample of spacing `dt`, plus
+    Gaussian observation noise of standard deviation `noise_std`. Each variable's
+    parents are its neighbours ``i - 2``, ``i - 1``, ``i + 1`` (and itself); the forcing
+    `F` moves the dynamics from periodic (small) to strongly chaotic (``F >= 8``).
+    :func:`~infoflow.benchmarks.lorenz96_graph` gives the ground-truth graph.
+    """
+    rng = _rng(seed)
+    h = dt / substeps
+
+    def f(x):
+        return (np.roll(x, -1) - np.roll(x, 2)) * np.roll(x, 1) - x + forcing
+
+    x = forcing + rng.normal(scale=0.01, size=n_vars)
+    out = np.empty((n + burn_in, n_vars))
+    for t in range(n + burn_in):
+        for _ in range(substeps):
+            k1 = f(x)
+            k2 = f(x + 0.5 * h * k1)
+            k3 = f(x + 0.5 * h * k2)
+            k4 = f(x + h * k3)
+            x = x + h * (k1 + 2 * k2 + 2 * k3 + k4) / 6
+        out[t] = x
+    out = out[burn_in:]
+    return out + noise_std * rng.normal(size=out.shape) if noise_std else out
+
+
 def noisy_eca(n=5000, n_cells=6, rule=90, noise=0.05, seed=None, burn_in=200):
     """
     An elementary cellular automaton on a ring, each update flipped with probability `noise`.
@@ -196,6 +230,25 @@ def common_driver(n=3000, noise=0.05, seed=None):
     x = np.roll(z, 1) ^ (rng.random(n) < noise)
     y = np.roll(z, 2) ^ (rng.random(n) < noise)
     return np.stack([x, y, z], axis=1)
+
+
+def switching_coupling(n=4000, block=500, noise=0.1, seed=None):
+    """
+    Binary pair whose coupling reverses every `block` samples :cite:`Saggioro2020`.
+
+    In even blocks (regime 0) ``y_t = x_{t-1}`` and ``x`` is a fair coin; in odd blocks
+    (regime 1) ``x_t = y_{t-1}`` and ``y`` is a fair coin; each copy is flipped with
+    probability `noise`. Columns (x, y).
+    """
+    rng = _rng(seed)
+    x, y = rng.integers(0, 2, n), rng.integers(0, 2, n)
+    for t in range(1, n):
+        flip = int(rng.random() < noise)
+        if (t // block) % 2 == 0:
+            y[t] = x[t - 1] ^ flip
+        else:
+            x[t] = y[t - 1] ^ flip
+    return np.stack([x, y], axis=1)
 
 
 def chain(n=3000, noise=0.1, seed=None):
