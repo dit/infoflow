@@ -30,6 +30,7 @@ Edge measures and statistics
 .. automodule:: infoflow.context
 .. automodule:: infoflow.crossfit
 .. automodule:: infoflow.layers
+.. automodule:: infoflow.bayes
 
 Parent selection
 ----------------

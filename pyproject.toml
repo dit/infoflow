@@ -64,6 +64,9 @@ causal = [
 gpu = [
     "torch>=2.4",
 ]
+bayes = [
+    "pymc>=5.10",
+]
 machines = [
     "sofic",
 ]
