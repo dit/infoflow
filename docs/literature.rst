@@ -132,9 +132,10 @@ first runs showed (:doc:`benchmarks`):
 * Against VAR and PCMCI+ baselines, infoflow ranks links best on nonlinear (logistic
   map) networks but trails the linear methods on linear ones and, markedly, on the
   smoothly sampled Lorenz-96 ring (AUROC 0.69 against 0.99 for VAR), in line with the
-  CausalRivers finding that linear baselines are hard to beat :cite:`Stein2025`.
-  Continuous estimators in selection (``estimator="gaussian"``, ``"ksg"``, or an
-  ensemble) are the first thing to try there.
+  CausalRivers finding that linear baselines are hard to beat :cite:`Stein2025`. The
+  cause was per-node symbols too fine for multivariate conditioning; the
+  ``network_resolution`` preprocessing option fixes it (precision and recall 0.98,
+  AUROC 0.99, :doc:`preprocessing`).
 * Hidden drivers remain the main failure mode for every method: infoflow's latent
   flags and LPCMCI's bidirected marks each catch only a small fraction of confounded
   pairs.

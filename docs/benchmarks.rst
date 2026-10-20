@@ -75,28 +75,39 @@ Ten-node random networks :cite:`Novelli2019` and a ten-variable Lorenz-96 ring
 baselines at level 0.01
 (``network_validation(kind, n_nodes=(10,), methods=("infoflow", "var", "pcmciplus"), baseline_alpha=0.01, prng=0)``):
 
-=============  =========  =========  ======  ===========  =====  =====
-Network        Method     Precision  Recall  Specificity  AUROC  AUPRC
-=============  =========  =========  ======  ===========  =====  =====
-VAR            infoflow   0.96       0.48    0.993        0.92   0.82
-VAR            VAR        1.00       0.92    1.000        1.00   1.00
-VAR            PCMCI+     0.95       0.96    0.986        0.99   0.98
-logistic maps  infoflow   0.94       0.53    0.993        0.93   0.87
-logistic maps  VAR        1.00       0.16    1.000        0.81   0.67
-logistic maps  PCMCI+     0.88       0.50    0.978        0.83   0.72
-Lorenz-96      infoflow   0.89       0.28    0.983        0.69   0.68
-Lorenz-96      VAR        0.86       1.00    0.917        0.99   0.99
-Lorenz-96      PCMCI+     1.00       0.37    1.000        0.74   0.71
-=============  =========  =========  ======  ===========  =====  =====
+=============  ==========  =========  ======  ===========  =====  =====
+Network        Method      Precision  Recall  Specificity  AUROC  AUPRC
+=============  ==========  =========  ======  ===========  =====  =====
+VAR            infoflow    0.96       0.48    0.993        0.92   0.82
+VAR            VAR         1.00       0.92    1.000        1.00   1.00
+VAR            PCMCI+      0.95       0.96    0.986        0.99   0.98
+logistic maps  infoflow    0.94       0.53    0.993        0.93   0.87
+logistic maps  VAR         1.00       0.16    1.000        0.81   0.67
+logistic maps  PCMCI+      0.88       0.50    0.978        0.83   0.72
+Lorenz-96      infoflow    0.89       0.28    0.983        0.69   0.68
+Lorenz-96      infoflow\*  0.98       0.98    0.992        0.99   0.99
+Lorenz-96      VAR         0.86       1.00    0.917        0.99   0.99
+Lorenz-96      PCMCI+      1.00       0.37    1.000        0.74   0.71
+=============  ==========  =========  ======  ===========  =====  =====
 
 On linear dynamics the linear baselines are near perfect, and infoflow's symbol-based
 selection trails in recall (``estimator="gaussian"`` closes that gap, see
 :doc:`validation`). On the nonlinear logistic maps infoflow ranks links best
 (AUROC 0.93 against 0.81 and 0.83) while the linear methods lose recall; this is the
-regime its nonparametric estimates are for. Lorenz-96 is its weak case: sampled
-smoothly, the flow is well approximated by a VAR, which recovers it almost perfectly,
-whereas rank symbols lose the small continuous increments that carry the coupling,
-and the run took about 14 minutes per network against seconds for the baselines.
+regime its nonparametric estimates are for. Lorenz-96 was its weak case with the default per-node symbols: sampled smoothly, each
+node is best predicted from its own past by fine symbols over two steps, and with
+three parents in the conditioning set those contexts hold too few samples for the
+plug-in tests. With ``preprocess={"network_resolution": "auto"}`` (marked \*;
+:doc:`preprocessing`), which chooses one coarser resolution for parent selection,
+infoflow recovers the ring (precision 0.98, recall 0.98) and ranks links as well as
+the VAR, with far fewer false links: the VAR's and the continuous estimators' extra
+links join nodes two steps apart on the ring, whose influence arrives within a
+sampling step, while exact conditioning on symbols screens them off. On the VAR
+networks the option trades precision for recall (0.86 / 0.72 against 0.96 / 0.48,
+AUROC 0.91 against 0.92); on the logistic maps its guard keeps the per-node symbols,
+so the results are unchanged. Runtime on Lorenz-96 (about 11 minutes per network) is
+almost all layer estimation for the many shared-flow candidates and bootstrap
+resamples; parent selection takes one to two seconds per target.
 
 External datasets
 -----------------

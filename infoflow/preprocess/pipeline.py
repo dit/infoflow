@@ -22,6 +22,18 @@ For each process, from that process's series alone:
 
 Choosing each node's parameters without looking at other nodes cannot create
 edges, so the later tests need no correction for this selection.
+
+With ``network_resolution``, a sixth step looks across nodes once: the per-node
+choices optimize each node's prediction from its own past, which can leave the joint
+contexts of parent selection (own past *and* several parents) far too sparse, as on
+smoothly sampled flows such as Lorenz-96. :func:`~infoflow.preprocess.scoring.network_scores`
+scores uniform resolutions :math:`(B, L)` by predicting each target from its own past
+and its most correlated sources, and the best is adopted for every node (``'auto'``:
+only if every node keeps at least ``network_retention`` of its own per-node score, so
+nodes whose dynamics need fine symbols, such as a strongly oscillating driver, keep
+them). This is one network-wide choice among a few resolutions, not an edge-wise
+one; :doc:`benchmarks` checks that it does not raise false positives on empty
+networks.
 """
 
 from dataclasses import dataclass, field
@@ -36,7 +48,7 @@ from ..embedding import Embedding
 from .delays import delay_candidates
 from .discretizers import Discretizer, EqualFrequency, EqualWidth, Ordinal, discretize
 from .scaling import block_entropy_scaling
-from .scoring import context_codes, score_contexts
+from .scoring import context_codes, network_scores, score_contexts
 from .screening import screen, split_missing
 
 __all__ = ("NodeReport", "PreprocessResult", "PreprocessingReport", "preprocess")
@@ -73,6 +85,7 @@ class PreprocessingReport:
 
     nodes: list = field(default_factory=list)
     settings: dict = field(default_factory=dict)
+    network: dict = field(default_factory=dict)
 
     def summary(self):
         descs = [
@@ -85,6 +98,13 @@ class PreprocessingReport:
             lines.append(
                 f"{n.name:<8}  {desc:<{width}}  {n.chosen.get('score', 0):6.3f}  {n.lag_budget:10d}  "
                 f"{n.storage:7.3f}  {','.join(n.flags)}"
+            )
+        net = self.network
+        if net:
+            verdict = "adopted" if net["adopted"] else "not adopted"
+            lines.append(
+                f"network resolution: {net['bins']} bins, history {net['history']} ({verdict}; "
+                f"smallest retained own score {min(net['retained']):.2f})"
             )
         return "\n".join(lines)
 
@@ -313,6 +333,29 @@ def _from_fixed(fixed, taus):
     raise ValueError(f"unknown discretizer {fixed!r}")
 
 
+def _network_resolution(trials, results, discretizers, embeddings, settings, mode, n_sources, retention):
+    """
+    The uniform network resolution, and whether it replaces the per-node choices.
+    """
+    histories = (1, 2) if settings["max_history"] >= 2 else (1,)
+    N = sum(len(t) for t in trials)
+    bins = tuple(B for B in settings["bins"] if B >= 2 and B ** (max(histories) + n_sources) <= N)
+    scores = network_scores(trials, bins or (2,), histories, n_sources, settings["resolutions"], settings["folds"])
+    B, L = max(scores, key=lambda k: scores[k])
+    candidate = {"kind": "equal_frequency", "bins": B, "dims": L, "delay": 1, "alphabet": B**L}
+    retained = []
+    for p, (_, _, node) in enumerate(results):
+        best = node.chosen.get("score", 0.0)
+        own = _score(candidate, [t[:, p] for t in trials], settings["resolutions"], settings["folds"])[0]
+        retained.append(float(own / best) if best > 0 else 1.0)
+    adopted = mode is True or min(retained) >= retention
+    network = {"bins": B, "history": L, "scores": scores, "retained": retained, "adopted": bool(adopted)}
+    if adopted:
+        discretizers = [EqualFrequency(B) for _ in discretizers]
+        embeddings = [Embedding(max_lag=L) for _ in embeddings]
+    return discretizers, embeddings, network
+
+
 def preprocess(
     data,
     names=None,
@@ -328,6 +371,9 @@ def preprocess(
     max_history=None,
     wpe_margin=0.05,
     equal_width=False,
+    network_resolution=False,
+    network_sources=2,
+    network_retention=0.7,
     map_fn=map,
     prng=None,
 ):
@@ -365,6 +411,17 @@ def preprocess(
         tails, where a parent's nonlinear effect (e.g. through :math:`x^2`) varies
         most, far better than equal-frequency bins; the price is that the pipeline
         is no longer invariant to monotone transforms of the data.
+    network_resolution : {False, 'auto', True}
+        Replace the per-node choices by one uniform resolution (equal-frequency bins
+        and history length) scored for parent selection
+        (:func:`~infoflow.preprocess.scoring.network_scores`): always (True), or only
+        if every node keeps at least `network_retention` of its per-node score
+        (``'auto'``). The decision is recorded in ``report.network``.
+    network_sources : int
+        Sources per target in the network score.
+    network_retention : float
+        Fraction of each node's own per-node score that the uniform resolution must
+        keep under ``'auto'``.
     map_fn : callable
         ``map``-like function over processes.
     prng : None, int, Generator
@@ -401,9 +458,17 @@ def preprocess(
     results = list(map_fn(run, range(P)))
     discretizers = [r[0] for r in results]
     embeddings = [r[1] for r in results]
+    network = {}
+    if network_resolution and settings["discretizer"] is None and P > 1:
+        discretizers, embeddings, network = _network_resolution(
+            clean, results, discretizers, embeddings, settings, network_resolution, network_sources, network_retention
+        )
     if max_lag is not None:
         for e in embeddings:
             e.max_lag = min(e.max_lag, max_lag)
-    report = PreprocessingReport(nodes=[r[2] for r in results], settings=settings)
+    settings.update(
+        network_resolution=network_resolution, network_sources=network_sources, network_retention=network_retention
+    )
+    report = PreprocessingReport(nodes=[r[2] for r in results], settings=settings, network=network)
     discrete = discretize(clean, discretizers, names)
     return PreprocessResult(discrete, embeddings, report)

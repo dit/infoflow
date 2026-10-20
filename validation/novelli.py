@@ -74,6 +74,12 @@ def main():
         "--methods", nargs="+", default=["infoflow"], help="infoflow and/or baselines: var, pcmciplus, lpcmci"
     )
     parser.add_argument("--no-edge-scores", action="store_true", help="skip the scores behind AUROC / AUPRC")
+    parser.add_argument(
+        "--network-resolution",
+        choices=("off", "auto", "on"),
+        default="off",
+        help="uniform symbols for parent selection",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", default=None, help="write the results to this netCDF file")
     args = parser.parse_args()
@@ -98,6 +104,7 @@ def main():
         baseline_alpha=args.alpha,
         edge_scores=not args.no_edge_scores,
         infer_kwargs={
+            "preprocess": {"network_resolution": {"off": False, "auto": "auto", "on": True}[args.network_resolution]},
             "include_shared_candidates": not args.no_shared,
             "skeleton_settings": settings,
             "map_fn": progress_map(thread_map(args.threads)),
@@ -114,6 +121,7 @@ def main():
         n_targets=str(args.n_targets),
         n_perm=n_perm,
         device=str(args.device),
+        network_resolution=args.network_resolution,
     )
     print(
         ds[["precision", "recall", "specificity", "lag_error", "auroc", "auprc", "runtime"]]
