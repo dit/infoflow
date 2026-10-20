@@ -12,7 +12,7 @@ from dit.inference._symbols import as_generator
 
 from .data import DiscreteData, realizations
 from .embedding import Embedding
-from .layers import LAYERS, adjust_layer_pvalues, layer_statistics
+from .layers import BAYES_THRESHOLD, LAYERS, adjust_layer_pvalues, layer_statistics
 from .selection import SkeletonSettings, _cmi, _Columns, infer_skeleton
 
 if TYPE_CHECKING:
@@ -39,8 +39,9 @@ class MultiplexNetwork:
         Edge variables over dimensions (layer, source, target): ``weight``,
         ``ci_low``, ``ci_high``, ``pvalue``, ``qvalue``, ``significant``; edge
         variables over (source, target): ``kind`` (``"parent"``,
-        ``"shared_candidate"``, or ``""``), ``delay``, ``n_samples``, ``omnibus_pvalue``;
-        and node variables over (node,).
+        ``"shared_candidate"``, or ``""``), ``layer_method`` (``"crossfit"``,
+        ``"bayes"``, or ``""``), ``delay``, ``n_samples``, ``omnibus_pvalue``; and node
+        variables over (node,).
     skeleton : dict
         ``target -> TargetSkeleton``.
     edges : dict
@@ -168,10 +169,23 @@ def _interaction_delay(cols, x_vars, w_vars):
 
 
 def estimate_edge(
-    data, target, x_vars, w_vars, estimator="miller_madow", n_boot=100, n_null=100, prng=None, adaptive=None
+    data,
+    target,
+    x_vars,
+    w_vars,
+    estimator="miller_madow",
+    n_boot=100,
+    n_null=100,
+    prng=None,
+    adaptive=None,
+    layer_method="crossfit",
+    bayes_threshold=BAYES_THRESHOLD,
 ):
     """
     Layer statistics for one edge given its source and context variables.
+
+    `layer_method` and `bayes_threshold` are passed to
+    :func:`~infoflow.layers.layer_statistics`.
 
     With `adaptive` (``(target_bins, candidate_bins)``), the layers are estimated on
     adaptive symbols from the raw series: the target and source in fixed equal-frequency
@@ -195,7 +209,18 @@ def estimate_edge(
         r = realizations(data, target, variables, max_lag=max_lag)
         y, x = r.present, r.columns(list(x_vars))
         w = r.columns(list(w_vars)) if w_vars else None
-    stats = layer_statistics(y, x, w, n_boot=n_boot, n_null=n_null, estimator=estimator, gap=max_lag, prng=prng)
+    stats = layer_statistics(
+        y,
+        x,
+        w,
+        n_boot=n_boot,
+        n_null=n_null,
+        estimator=estimator,
+        gap=max_lag,
+        layer_method=layer_method,
+        bayes_threshold=bayes_threshold,
+        prng=prng,
+    )
     cols = _Columns(data, target, variables, max_lag)
     return stats, _interaction_delay(cols, list(x_vars), list(w_vars))
 
@@ -242,6 +267,8 @@ def infer_multiplex(
     checkpoint=None,
     device=None,
     layer_symbols="preprocessed",
+    layer_method="crossfit",
+    bayes_threshold=BAYES_THRESHOLD,
     machines=False,
     machine_settings=None,
     directed_information=False,
@@ -312,6 +339,16 @@ def infer_multiplex(
         per edge from the raw series (the context partitioned by MDL together with the
         target, as in ``SkeletonSettings(estimator='adaptive')``), which resolves a
         strongly nonlinear parent in the context finely enough to expose weak edges.
+    layer_method : {'crossfit', 'bayes', 'auto'}
+        How each edge's layer weights and intervals are estimated: cross-fitting with
+        bootstrap intervals, or posterior means and credible intervals of the
+        hierarchical Dirichlet mixture (:func:`~infoflow.layers.layer_statistics`),
+        which is more accurate when the context is sparse; ``'auto'`` uses the latter
+        only for edges with fewer than `bayes_threshold` samples per observed context
+        value. Significance is decided by the same nulls either way. The method used
+        per edge is reported as the ``layer_method`` variable. ``'bayes'`` and
+        ``'auto'`` need pymc (``pip install 'infoflow[bayes]'``).
+    bayes_threshold : float
     checkpoint : str, Path, or Checkpoint, None
         A directory where per-target skeletons and per-edge estimates are stored as
         they finish; rerunning with the same directory and seed resumes.
@@ -352,6 +389,12 @@ def infer_multiplex(
     settings = skeleton_settings or SkeletonSettings()
     if layer_symbols not in ("preprocessed", "adaptive"):
         raise ValueError("layer_symbols must be 'preprocessed' or 'adaptive'")
+    if layer_method not in ("crossfit", "bayes", "auto"):
+        raise ValueError("layer_method must be 'crossfit', 'bayes', or 'auto'")
+    if layer_method != "crossfit":
+        from .bayes import _pymc
+
+        _pymc()
     adaptive_layers = (
         (settings.adaptive_target_bins, settings.adaptive_candidate_bins) if layer_symbols == "adaptive" else None
     )
@@ -405,7 +448,17 @@ def infer_multiplex(
 
         def compute():
             return estimate_edge(
-                estimation_data, t, x_vars, w_vars, estimator, n_boot, n_null, int(seed), adaptive=adaptive_layers
+                estimation_data,
+                t,
+                x_vars,
+                w_vars,
+                estimator,
+                n_boot,
+                n_null,
+                int(seed),
+                adaptive=adaptive_layers,
+                layer_method=layer_method,
+                bayes_threshold=bayes_threshold,
             )
 
         stats, delay = compute() if checkpoint is None else checkpoint.cached(f"edge-{p}-{t}-{kind}", compute)
@@ -479,6 +532,8 @@ def infer_multiplex(
         "directed_information": directed_information,
         "hyperedges": hyperedges,
         "layer_symbols": layer_symbols,
+        "layer_method": layer_method,
+        "bayes_threshold": bayes_threshold,
         "hyperedge_measure": str(hyperedge_measure),
         "max_sources": max_sources,
         "max_lag": max_lag,
@@ -511,6 +566,7 @@ def _assemble(data, names, skeleton, results, alpha, fdr_dependent):
     high = np.full(shape, np.nan)
     pvalue = np.full(shape, np.nan)
     kind = np.full((P, P), "", dtype=object)
+    method = np.full((P, P), "", dtype=object)
     delay = np.zeros((P, P), dtype=np.int64)
     n_samples = np.zeros((P, P), dtype=np.int64)
     omnibus = np.full(P, np.nan)
@@ -525,6 +581,7 @@ def _assemble(data, names, skeleton, results, alpha, fdr_dependent):
             if layer in stats.pvalue:
                 pvalue[i, s, t] = stats.pvalue[layer]
         kind[s, t] = k
+        method[s, t] = stats.method
         delay[s, t] = d
         n_samples[s, t] = stats.flow.n_samples
     layer_p = {layer: pvalue[EDGE_LAYERS.index(layer)] for layer in LAYERS}
@@ -552,6 +609,7 @@ def _assemble(data, names, skeleton, results, alpha, fdr_dependent):
             "qvalue": (("layer", "source", "target"), q),
             "significant": (("layer", "source", "target"), sig),
             "kind": (("source", "target"), kind.astype(str)),
+            "layer_method": (("source", "target"), method.astype(str)),
             "delay": (("source", "target"), delay),
             "n_samples": (("source", "target"), n_samples),
             "omnibus_pvalue": (("node",), omnibus),
