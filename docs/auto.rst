@@ -27,8 +27,11 @@ Pipeline
 
 1. **Diagnose.** Integer arrays are symbols; float arrays are preprocessed
    (:func:`~infoflow.preprocess.preprocess`: screening, discretizer and lag budget
-   per node). The report lists the sample size, processes, trials, and flagged
-   nodes.
+   per node, then the guarded network resolution, :doc:`preprocessing`, which
+   replaces symbols too fine for multivariate conditioning by one coarser resolution
+   when every node keeps most of its own predictability). The report lists the
+   sample size, processes, trials, flagged nodes, and the network-resolution
+   decision.
 2. **Choose the estimators.** Selection always uses the plug-in CMI on the
    preprocessing symbols. For continuous data it adds the linear-Gaussian estimator,
    in one greedy search at a Bonferroni-split level, for every target whose present
@@ -63,7 +66,11 @@ Interpretation         off                        on                         on
 Shared-only layers     off                        off                        on
 Hyperedges             off                        off                        on
 Source pre-screen      above 30 processes         above 30 processes         above 30 processes
+Network resolution     auto                       auto                       auto
 =====================  =========================  =========================  ==============================
+
+``network_resolution=False`` restores the per-node symbols; ``True`` forces the
+uniform resolution.
 
 The batched GPU kernels are used when PyTorch is installed.
 

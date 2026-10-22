@@ -51,6 +51,7 @@ PRESETS = {
         "include_shared_candidates": False,
         "interpret": False,
         "hyperedges": False,
+        "network_resolution": "auto",
     },
     "balanced": {
         "continuous": ("plugin", "gaussian"),
@@ -58,6 +59,7 @@ PRESETS = {
         "include_shared_candidates": False,
         "interpret": True,
         "hyperedges": False,
+        "network_resolution": "auto",
     },
     "thorough": {
         "continuous": ("plugin", "gaussian", "ksg"),
@@ -65,6 +67,7 @@ PRESETS = {
         "include_shared_candidates": True,
         "interpret": True,
         "hyperedges": True,
+        "network_resolution": "auto",
     },
 }
 
@@ -145,6 +148,12 @@ class AutoReport:
                 f"Gaussian selection gated off for {len(d['nonlinear_targets'])} target(s) that test nonlinear: "
                 + ", ".join(map(str, d["nonlinear_targets"]))
             )
+        if d.get("network_resolution"):
+            n = d["network_resolution"]
+            lines.append(
+                f"network resolution {n['bins']} bins, history {n['history']}: "
+                f"{'adopted' if n['adopted'] else 'not adopted'} (smallest retained own score {n['min_retained']:.2f})"
+            )
         if d.get("flagged"):
             lines.append("flagged nodes: " + "; ".join(f"{k}: {', '.join(v)}" for k, v in d["flagged"].items()))
         lines += [f"downgrade: {g}" for g in self.downgrades]
@@ -208,7 +217,7 @@ def _split_overrides(overrides):
     )
 
 
-def _diagnose(trials, names, prng, max_lag=None):
+def _diagnose(trials, names, prng, max_lag=None, network_resolution=False):
     """
     The discrete data, embeddings, preprocessing report, and diagnostics of `trials`.
     """
@@ -228,7 +237,12 @@ def _diagnose(trials, names, prng, max_lag=None):
         return data, Embedding(max_lag=max_lag or 3), None, diagnostics
     from .preprocess.pipeline import preprocess
 
-    result = preprocess(trials, names=names, max_lag=max_lag, prng=prng)
+    result = preprocess(trials, names=names, max_lag=max_lag, network_resolution=network_resolution, prng=prng)
+    if result.report.network:
+        net = result.report.network
+        diagnostics["network_resolution"] = {k: net[k] for k in ("bins", "history", "adopted")} | {
+            "min_retained": float(min(net["retained"]))
+        }
     for node in result.report.nodes:
         flags = list(node.flags)
         if node.screen is not None and getattr(node.screen, "nonstationary", False) and "nonstationary" not in flags:
@@ -460,6 +474,7 @@ def infer(
     max_lag=None,
     threads=None,
     strict_budget=False,
+    network_resolution=None,
     prng=None,
     **overrides,
 ):
@@ -489,6 +504,10 @@ def infer(
     strict_budget : bool
         Raise instead of warning when even the smallest configuration is predicted to
         exceed the budget.
+    network_resolution : {None, False, 'auto', True}
+        Preprocessing's uniform resolution for parent selection
+        (:func:`~infoflow.preprocess.preprocess`); None takes the preset's (``'auto'``
+        in every preset).
     prng : None, int, Generator
     **overrides
         Any :class:`~infoflow.selection.SkeletonSettings` field or
@@ -512,10 +531,12 @@ def infer(
     pre_seed, run_seed = (int(s) for s in rng.integers(0, 2**32, size=2))
     threads = threads or os.cpu_count() or 1
     trials = as_trials(data)
-    discrete, embeddings, _, diagnostics = _diagnose(trials, names, pre_seed, max_lag)
+    preset_options = PRESETS[preset]
+    if network_resolution is None:
+        network_resolution = preset_options["network_resolution"]
+    discrete, embeddings, _, diagnostics = _diagnose(trials, names, pre_seed, max_lag, network_resolution)
     P = discrete.n_processes
     targets = list(range(P)) if targets is None else list(targets)
-    preset_options = PRESETS[preset]
     chosen = pinned_skeleton.pop("estimator", preset_options[diagnostics["kind"]])
     estimators = (chosen,) if isinstance(chosen, str) else tuple(chosen)
     if "estimator" in overrides:

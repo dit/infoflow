@@ -212,7 +212,9 @@ def test_infer_reuses_pilot_skeletons_exactly():
     x = simulate_network(graph, 1500, "var", prng=4)
     result = auto.infer(x, preset="fast", prng=3)
     pre, run = (int(s) for s in as_generator(3).integers(0, 2**32, size=2))
-    discrete, embeddings, _, _ = auto._diagnose(as_trials(x), None, pre)
+    discrete, embeddings, _, _ = auto._diagnose(
+        as_trials(x), None, pre, network_resolution=auto.PRESETS["fast"]["network_resolution"]
+    )
     settings = auto._skeleton_settings(
         result.report.estimators, False, result.report.options["threads"], result.report.options["device"], {}
     )
@@ -253,3 +255,18 @@ def test_infer_gates_gaussian_per_target():
     assert report.diagnostics["nonlinear_targets"] == [1, 3]
     assert result.network.settings["skeleton_settings"].target_estimators == {1: ("plugin",), 3: ("plugin",)}
     assert all(name != "gaussian" for (s, t), name in report.admitted.items() if t in (1, 3))
+
+
+@pytest.mark.slow
+def test_presets_use_network_resolution_on_lorenz96():
+    from infoflow.benchmarks import lorenz96_graph
+
+    x = datasets.lorenz96(1000, n_vars=8, seed=0)
+    result = auto.infer(x, preset="fast", max_lag=2, prng=0)
+    net = result.report.diagnostics["network_resolution"]
+    assert net["adopted"] and "network resolution" in str(result.report)
+    truth = set(lorenz96_graph(8).edges())
+    found = {(p, t) for t, sk in result.network.skeleton.items() if sk.significant for p in sk.parents()}
+    assert len(found & truth) >= 0.8 * len(truth) and len(found - truth) <= 2
+    off = auto.infer(x, preset="fast", max_lag=2, network_resolution=False, prng=0)
+    assert "network_resolution" not in off.report.diagnostics
