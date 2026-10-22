@@ -436,7 +436,9 @@ def network_validation(
     """
     Infer random networks of known structure and score them :cite:`Novelli2019`.
 
-    Every method sees the same graphs and simulations. Besides infoflow, `methods` may
+    Every method sees the same graphs and simulations. Besides infoflow
+    (:func:`~infoflow.network.infer_multiplex` with `infer_kwargs`) and ``'auto'``
+    (:func:`~infoflow.auto.infer`, fast preset, with edge scores), `methods` may
     name the baselines of :mod:`infoflow.baselines` (``'var'``, ``'pcmciplus'``,
     ``'lpcmci'``), which a fair comparison needs: simple vector autoregression is often
     the strongest method on real benchmarks :cite:`Stein2025`. Baselines have only
@@ -463,7 +465,7 @@ def network_validation(
         Infer and score only this many randomly chosen targets per network (links into
         them), which keeps slow estimators tractable on large networks.
     methods : sequence of str
-        ``'infoflow'`` and/or baseline names.
+        ``'infoflow'``, ``'auto'``, and/or baseline names.
     baseline_alpha : float
         Significance level of the baselines.
     edge_scores : bool
@@ -512,6 +514,14 @@ def network_validation(
                     t0 = time.perf_counter()
                     if method == "infoflow":
                         net = infer_multiplex(data, targets=targets, prng=seed, **kwargs)
+                        elapsed = time.perf_counter() - t0
+                        scores = score_network(net, graph, levels, targets)
+                    elif method == "auto":
+                        from .auto import infer
+
+                        net = infer(
+                            data, preset="fast", targets=targets, max_lag=max_lag, edge_scores=True, prng=seed
+                        ).network
                         elapsed = time.perf_counter() - t0
                         scores = score_network(net, graph, levels, targets)
                     else:

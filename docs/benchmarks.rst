@@ -50,7 +50,8 @@ benchmarks therefore rank every candidate link by a continuous score and report 
 AUROC and AUPRC :cite:`Cheng2024,Stein2025`. With
 ``SkeletonSettings(edge_scores=True)`` every candidate source gets a score, the
 conditional transfer entropy of its best lag given the target's selected past and the
-other selected sources, minus its permutation-null mean; the network's ``score``
+other selected sources, as a z-score against permutations (comparable across targets,
+unlike raw estimates); the network's ``score``
 variable holds them and :func:`~infoflow.benchmarks.score_network` reports ``auroc``
 and ``auprc`` (:func:`~infoflow.benchmarks.rank_metrics`) beside the thresholded
 metrics. :func:`~infoflow.benchmarks.network_validation` turns the scores on by default.
@@ -70,44 +71,46 @@ runs every method on the same graphs and simulations; the results gain an
 :cite:`Lorenz1996,Tank2022`. ``validation/novelli.py`` exposes both as ``--methods``
 and ``--kind lorenz96``.
 
-Ten-node random networks :cite:`Novelli2019` and a ten-variable Lorenz-96 ring
-(lag limit 2), 1000 samples, two simulations each, default infoflow settings,
-baselines at level 0.01
-(``network_validation(kind, n_nodes=(10,), methods=("infoflow", "var", "pcmciplus"), baseline_alpha=0.01, prng=0)``):
+Random networks :cite:`Novelli2019` and Lorenz-96 rings with 10 and 20 nodes, 1000
+samples, five simulations each, :func:`infoflow.infer` (fast preset, with edge scores)
+against the baselines at level 0.01
+(``network_validation(kind, n_nodes=(10, 20), n_reps=5, methods=("auto", "var", "pcmciplus"), baseline_alpha=0.01, prng=0)``;
+lag limit 5, or 2 for Lorenz-96). AUROC is the mean over simulations (standard
+deviations 0.00-0.06):
 
-=============  ==========  =========  ======  ===========  =====  =====
-Network        Method      Precision  Recall  Specificity  AUROC  AUPRC
-=============  ==========  =========  ======  ===========  =====  =====
-VAR            infoflow    0.96       0.48    0.993        0.92   0.82
-VAR            VAR         1.00       0.92    1.000        1.00   1.00
-VAR            PCMCI+      0.95       0.96    0.986        0.99   0.98
-logistic maps  infoflow    0.94       0.53    0.993        0.93   0.87
-logistic maps  VAR         1.00       0.16    1.000        0.81   0.67
-logistic maps  PCMCI+      0.88       0.50    0.978        0.83   0.72
-Lorenz-96      infoflow    0.89       0.28    0.983        0.69   0.68
-Lorenz-96      infoflow\*  0.98       0.98    0.992        0.99   0.99
-Lorenz-96      VAR         0.86       1.00    0.917        0.99   0.99
-Lorenz-96      PCMCI+      1.00       0.37    1.000        0.74   0.71
-=============  ==========  =========  ======  ===========  =====  =====
+=============  =====  =========  =========  ======  =====  =====
+Network        Nodes  Method     Precision  Recall  AUROC  AUPRC
+=============  =====  =========  =========  ======  =====  =====
+VAR            10     infer      0.99       0.79    0.99   0.99
+VAR            10     VAR        1.00       0.77    0.98   0.98
+VAR            10     PCMCI+     0.98       0.90    0.97   0.97
+VAR            20     infer      1.00       0.57    0.97   0.92
+VAR            20     VAR        0.99       0.49    0.95   0.88
+VAR            20     PCMCI+     0.96       0.78    0.93   0.87
+logistic maps  10     infer      1.00       0.33    0.93   0.90
+logistic maps  10     VAR        1.00       0.09    0.76   0.65
+logistic maps  10     PCMCI+     0.79       0.33    0.76   0.66
+logistic maps  20     infer      1.00       0.22    0.92   0.80
+logistic maps  20     VAR        1.00       0.05    0.72   0.41
+logistic maps  20     PCMCI+     0.53       0.27    0.73   0.43
+Lorenz-96      10     infer      1.00       0.93    1.00   1.00
+Lorenz-96      10     VAR        0.87       0.99    1.00   0.99
+Lorenz-96      10     PCMCI+     1.00       0.41    0.74   0.71
+Lorenz-96      20     infer      1.00       0.95    1.00   1.00
+Lorenz-96      20     VAR        0.87       0.98    1.00   0.99
+Lorenz-96      20     PCMCI+     0.99       0.42    0.80   0.65
+=============  =====  =========  =========  ======  =====  =====
 
-On linear dynamics the linear baselines are near perfect, and infoflow's symbol-based
-selection trails in recall (``estimator="gaussian"`` closes that gap, see
-:doc:`validation`). On the nonlinear logistic maps infoflow ranks links best
-(AUROC 0.93 against 0.81 and 0.83) while the linear methods lose recall; this is the
-regime its nonparametric estimates are for. Lorenz-96 was its weak case with the default per-node symbols: sampled smoothly, each
-node is best predicted from its own past by fine symbols over two steps, and with
-three parents in the conditioning set those contexts hold too few samples for the
-plug-in tests. With ``preprocess={"network_resolution": "auto"}`` (marked \*;
-:doc:`preprocessing`), which chooses one coarser resolution for parent selection,
-infoflow recovers the ring (precision 0.98, recall 0.98) and ranks links as well as
-the VAR, with far fewer false links: the VAR's and the continuous estimators' extra
-links join nodes two steps apart on the ring, whose influence arrives within a
-sampling step, while exact conditioning on symbols screens them off. On the VAR
-networks the option trades precision for recall (0.86 / 0.72 against 0.96 / 0.48,
-AUROC 0.91 against 0.92); on the logistic maps its guard keeps the per-node symbols,
-so the results are unchanged. Runtime on Lorenz-96 (about 11 minutes per network) is
-almost all layer estimation for the many shared-flow candidates and bootstrap
-resamples; parent selection takes one to two seconds per target.
+On these synthetic systems ``infer`` ranks links as well as or better than both
+baselines everywhere, clearly so on the nonlinear logistic maps, and never loses
+precision; at its strict selection level its thresholded recall trails PCMCI+ on the
+linear networks. Lorenz-96 needed the guarded network resolution of
+:doc:`preprocessing`: with per-node symbols (6 to 8 bins over two steps) and three
+parents in the conditioning set, the plug-in tests are starved, and infoflow's recall
+was 0.28 (AUROC 0.69). The VAR's extra links on Lorenz-96 join nodes two steps apart
+on the ring, whose influence arrives within a sampling step; exact conditioning on
+symbols screens them off. ``infer`` takes 1-15 minutes per network here against
+seconds for the baselines, mostly in layer estimation.
 
 External datasets
 -----------------
@@ -126,6 +129,57 @@ data from their sites; nothing is shipped):
 
 Every loader returns the data and a ``networkx.DiGraph``, which
 :func:`~infoflow.benchmarks.score_edges` scores against.
+
+Results on external benchmarks
+------------------------------
+
+``validation/external.py`` runs :func:`infoflow.infer` (fast preset, with edge scores)
+against VAR and PCMCI+ (partial correlation, level 0.01) on downloaded benchmark data.
+CausalTime's generated datasets could not be obtained (its download site was
+unreachable; the code repository holds only the generator's inputs), and CauseMe
+scores uploads on its own platform behind an account, so neither is included.
+
+*NetSim* :cite:`Smith2011`, ten subjects per simulation, lag limit 2; AUROC for
+directed links and, as in Smith et al.'s main analysis, for links in either direction:
+
+==========  =====  ======  ===============  ===============  ===============
+Simulation  Nodes  TRs     infer            VAR              PCMCI+
+==========  =====  ======  ===============  ===============  ===============
+1           5      200     0.62 / 0.67      0.53 / 0.54      0.56 / 0.61
+2           10     200     0.62 / 0.66      0.65 / 0.62      0.70 / 0.68
+3           15     200     0.61 / 0.65      0.59 / 0.65      0.68 / 0.73
+5           5      1200    0.68 / 0.81      0.68 / 0.93      0.46 / 0.52
+6           10     1200    0.77 / 0.80      0.80 / 0.90      0.58 / 0.63
+==========  =====  ======  ===============  ===============  ===============
+
+(directed / undirected AUROC.) Directions are hard for every method, as Smith et al.
+found for lag-based methods on BOLD signals; with the long sessions the linear VAR
+detects connections best, and ``infer`` is at the VAR's level for directions. At the
+strict selection level ``infer`` declares few links on these short series (recall
+0.00-0.13).
+
+*CausalRivers* :cite:`Stein2025`, forty random connected subgraphs of the East German
+network per size, resampled to 6 hours (24 samples) and 1 day (96), lag limit 3; mean
+AUROC per graph, self-links ignored, as in the paper:
+
+========================  =====  =====  ======
+Subgraphs, resolution     infer  VAR    PCMCI+
+========================  =====  =====  ======
+3 nodes, 6 h              0.64   0.67   0.67
+3 nodes, 1 day            0.58   0.60   0.55
+5 nodes, 6 h              0.67   0.74   0.68
+5 nodes, 1 day            0.56   0.62   0.58
+========================  =====  =====  ======
+
+The paper's best-tuned VAR reaches 0.82 and 0.80 on its full Random-3 and Random-5
+sets, choosing resolution, lag, normalization, and coefficient handling with the
+labels; with one fixed configuration our VAR is lower, and ``infer`` trails it by
+0.03-0.07, at PCMCI+'s level. Its precision here is 0.24-0.41: discharge is smooth,
+strongly autocorrelated, and driven by shared weather, so coarse symbols leave most
+of each station's memory unconditioned and stations appear to predict each other.
+Pinning the Gaussian estimator or turning network resolution off did not help on a
+sample of these graphs. On this real-world benchmark, unlike the synthetic ones,
+``infer`` is not competitive with the linear baseline.
 
 Latent confounding
 ------------------

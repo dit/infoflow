@@ -270,3 +270,10 @@ def test_presets_use_network_resolution_on_lorenz96():
     assert len(found & truth) >= 0.8 * len(truth) and len(found - truth) <= 2
     off = auto.infer(x, preset="fast", max_lag=2, network_resolution=False, prng=0)
     assert "network_resolution" not in off.report.diagnostics
+
+
+def test_infer_pins_edge_scores():
+    data = datasets.chain(2000, seed=0).astype(np.int64)
+    net = auto.infer(data, preset="fast", edge_scores=True, prng=0).network
+    score = net.dataset["score"].values
+    assert score[0, 1] > score[2, 1] and score[1, 2] > score[0, 2]

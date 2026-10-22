@@ -14,6 +14,7 @@ from dit.inference import Trials
 
 __all__ = (
     "adjacency_graph",
+    "causalrivers_subset",
     "causeme_matrices",
     "export_brainnet",
     "load",
@@ -22,6 +23,7 @@ __all__ = (
     "load_fieldtrip",
     "load_mat",
     "load_netsim",
+    "read_causalrivers",
     "sample_subgraph",
     "save",
     "to_causeme",
@@ -200,7 +202,76 @@ def load_causaltime(data, graph, orientation="source_target", residual_block=Tru
     return out, adjacency_graph(A)
 
 
-def load_causalrivers(ts_csv, graph_pickle, nodes=None):
+def read_causalrivers(ts_csv, graph_pickle):
+    """
+    The full CausalRivers tables :cite:`Stein2025`, read once.
+
+    Returns
+    -------
+    values : numpy.ndarray
+        (time, stations), float32, NaN where missing.
+    graph : networkx.DiGraph
+        Ground truth over station ids (upstream -> downstream).
+    stations : list of str
+        Station id of each column.
+    """
+    import csv
+
+    with open(graph_pickle, "rb") as fh:
+        graph = pickle.load(fh)
+    with open(ts_csv, newline="") as fh:
+        reader = csv.reader(fh)
+        stations = [_station(h) for h in next(reader)[1:]]
+        values = np.array([[float(v) if v != "" else np.nan for v in r[1:]] for r in reader], dtype=np.float32)
+    return values, graph, stations
+
+
+def _resample(values, block):
+    n = len(values) // block
+    blocks = values[: n * block].reshape(n, block, values.shape[1])
+    with np.errstate(invalid="ignore"):
+        counts = np.sum(~np.isnan(blocks), axis=1)
+        means = np.nansum(blocks, axis=1) / np.maximum(counts, 1)
+    return np.where(counts > 0, means, np.nan)
+
+
+def causalrivers_subset(values, graph, stations, nodes, resample=1):
+    """
+    The series and induced ground truth of a subset of CausalRivers stations.
+
+    Parameters
+    ----------
+    values, graph, stations
+        From :func:`read_causalrivers`.
+    nodes : list
+        Station ids, e.g. from :func:`sample_subgraph`.
+    resample : int
+        Average blocks of this many samples (NaN-aware), e.g. 24 for 6-hour
+        resolution of the 15-minute data.
+
+    Returns
+    -------
+    data : numpy.ndarray
+        (time, len(nodes)); rows with missing values are dropped.
+    graph : networkx.DiGraph
+        The induced ground truth relabelled ``0..len(nodes)-1`` in the order of `nodes`,
+        each node carrying its station id as ``station``.
+    """
+    import networkx as nx
+
+    columns = {s: i for i, s in enumerate(stations)}
+    sub = values[:, [columns[_station(n)] for n in nodes]].astype(float)
+    if resample > 1:
+        sub = _resample(sub, resample)
+    sub = sub[~np.isnan(sub).any(axis=1)]
+    relabelled = nx.relabel_nodes(graph.subgraph(nodes).copy(), {n: k for k, n in enumerate(nodes)})
+    truth = nx.DiGraph()
+    truth.add_nodes_from((k, {"station": n}) for k, n in enumerate(nodes))
+    truth.add_edges_from(relabelled.edges())
+    return sub, truth
+
+
+def load_causalrivers(ts_csv, graph_pickle, nodes=None, resample=1):
     """
     River-discharge series and ground truth from CausalRivers :cite:`Stein2025`.
 
@@ -213,6 +284,8 @@ def load_causalrivers(ts_csv, graph_pickle, nodes=None):
     nodes : list, None
         Station ids to keep, e.g. from :func:`sample_subgraph` (default: every station
         present in both files).
+    resample : int
+        Average blocks of this many samples (see :func:`causalrivers_subset`).
 
     Returns
     -------
@@ -223,27 +296,12 @@ def load_causalrivers(ts_csv, graph_pickle, nodes=None):
         each node carrying its station id as ``station``.
     names : list of str
     """
-    import csv
-
-    import networkx as nx
-
-    with open(graph_pickle, "rb") as fh:
-        full = pickle.load(fh)
-    with open(ts_csv, newline="") as fh:
-        reader = csv.reader(fh)
-        header = next(reader)[1:]
-        rows = [r[1:] for r in reader]
-    columns = {_station(h): i for i, h in enumerate(header)}
+    values, full, stations = read_causalrivers(ts_csv, graph_pickle)
+    present = set(stations)
     if nodes is None:
-        nodes = [n for n in full.nodes if _station(n) in columns]
-    idx = [columns[_station(n)] for n in nodes]
-    values = np.array([[float(r[i]) if r[i] != "" else np.nan for i in idx] for r in rows])
-    values = values[~np.isnan(values).any(axis=1)]
-    sub = nx.relabel_nodes(full.subgraph(nodes).copy(), {n: k for k, n in enumerate(nodes)})
-    graph = nx.DiGraph()
-    graph.add_nodes_from((k, {"station": n}) for k, n in enumerate(nodes))
-    graph.add_edges_from(sub.edges())
-    return values, graph, [str(n) for n in nodes]
+        nodes = [n for n in full.nodes if _station(n) in present]
+    data, truth = causalrivers_subset(values, full, stations, nodes, resample)
+    return data, truth, [str(n) for n in nodes]
 
 
 def _station(x):

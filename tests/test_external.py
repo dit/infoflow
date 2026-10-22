@@ -139,3 +139,18 @@ def test_score_edges_without_lags():
 
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__])
+
+
+def test_causalrivers_subset_resamples_and_drops_gaps():
+    import networkx as nx
+
+    from infoflow.io import causalrivers_subset
+
+    values = np.arange(16, dtype=np.float32).reshape(8, 2)
+    values[1, 0] = np.nan
+    values[4:6, 1] = np.nan
+    g = nx.DiGraph([(7, 9)])
+    data, truth = causalrivers_subset(values, g, ["7", "9"], [7, 9], resample=2)
+    # Block means ignore missing values; the block with no value for station 9 is dropped.
+    assert np.allclose(data, [[0.0, 2.0], [5.0, 6.0], [13.0, 14.0]])
+    assert set(truth.edges()) == {(0, 1)}

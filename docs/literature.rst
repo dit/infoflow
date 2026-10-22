@@ -129,21 +129,25 @@ additions (stability selection, regimes and contexts, estimators, higher-order
 diagnostics, :doc:`methods`). Each item cites its source in its docstring. What the
 first runs showed (:doc:`benchmarks`):
 
-* Against VAR and PCMCI+ baselines, infoflow ranks links best on nonlinear (logistic
-  map) networks but trails the linear methods on linear ones and, markedly, on the
-  smoothly sampled Lorenz-96 ring (AUROC 0.69 against 0.99 for VAR), in line with the
-  CausalRivers finding that linear baselines are hard to beat :cite:`Stein2025`. The
-  cause was per-node symbols too fine for multivariate conditioning; the
-  ``network_resolution`` preprocessing option fixes it (precision and recall 0.98,
-  AUROC 0.99, :doc:`preprocessing`).
+* On synthetic networks (VAR, coupled logistic maps, Lorenz-96; 10 and 20 nodes, five
+  simulations), :func:`infoflow.infer` ranks links as well as or better than VAR and
+  PCMCI+ everywhere (AUROC 0.92-1.00) with precision 0.99-1.00, after the guarded
+  network resolution fixed Lorenz-96 (AUROC 0.69 before).
+* On real or realistic data it is not ahead. On NetSim fMRI it matches the VAR for
+  directions (both near 0.6-0.8 AUROC) but detects connections less well with long
+  sessions (0.80 against 0.90-0.93). On CausalRivers it trails a single-configuration
+  VAR by 0.03-0.07 AUROC, at PCMCI+'s level, with low precision: smooth, strongly
+  autocorrelated, weather-driven discharge defeats symbol-based conditioning. This
+  matches the CausalRivers finding that linear baselines are hardest to beat
+  :cite:`Stein2025`. CausalTime and CauseMe could not be run.
 * Hidden drivers remain the main failure mode for every method: infoflow's latent
   flags and LPCMCI's bidirected marks each catch only a small fraction of confounded
   pairs.
 * The O-information rate is not a proxy for the synergistic layer: on a rule-90
   cellular automaton it reports redundancy where every edge is synergistic.
 
-Open next steps: run the CausalTime, CausalRivers, and NetSim loaders on the released
-data and report the tables; an event-time data model for continuous-time spike TE
+Open next steps: conditioning that handles strong autocorrelation and shared drivers
+on real data (the CausalRivers gap); CausalTime once its data are reachable; an event-time data model for continuous-time spike TE
 :cite:`Shorten2021,Shorten2025`; neural forecasters for the predictive estimator
 :cite:`Kornai2025`; and pyspi-style usefulness benchmarks of the layers as features
 :cite:`Cliff2023,Liu2025`.

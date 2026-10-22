@@ -115,9 +115,11 @@ class SkeletonSettings:
     ``edge_scores`` adds a continuous score for every candidate source process,
     :attr:`TargetSkeleton.source_scores`, for rank metrics such as AUROC and AUPRC
     :cite:`Cheng2024,Stein2025`: the conditional transfer entropy of the source's best
-    lag given the target's selected past and the other processes' selected sources,
-    minus its mean over ``n_perm_scores`` permutations, so that sources with different
-    plug-in biases are comparable. With an ensemble, the first estimator scores.
+    lag given the target's selected past and the other processes' selected sources, as
+    a z-score against ``n_perm_scores`` permutations (estimate minus null mean, over
+    null standard deviation). Raw estimates are not comparable across targets, whose
+    conditioning sets and plug-in biases differ; the z-scores are. With an ensemble,
+    each source's score is the largest over the estimators.
     """
 
     n_perm_max_stat: int = 200
@@ -1092,7 +1094,7 @@ def _individual(cols, variables, cond, v, idx=None, perm=None, n_perm=0):
 
 def _source_scores(cols, perm, candidates, base, selected, n_perm):
     """
-    Per source process, the largest null-centered CMI over its lags given `base` and
+    Per source process, the largest permutation z-score of the CMI over its lags given `base` and
     the selected variables of the other processes.
     """
     scores = {}
@@ -1103,8 +1105,9 @@ def _source_scores(cols, perm, candidates, base, selected, n_perm):
         for v in (u for u in candidates if u[0] == p):
             c, a = cols.column(v)
             obs = cols.cmi(c, a, z, Kz)
-            center = float(np.mean(cols.cmi_batch(c, a, z, Kz, idx))) if n_perm else 0.0
-            best = max(best, obs - center)
+            null = cols.cmi_batch(c, a, z, Kz, idx) if n_perm else np.zeros(1)
+            spread = float(np.std(null, ddof=1)) if len(null) > 1 else 0.0
+            best = max(best, (obs - float(np.mean(null))) / spread if spread > 0 else obs - float(np.mean(null)))
         scores[p] = float(best)
     return scores
 
@@ -1444,8 +1447,8 @@ class _EnsembleStages:
         return self._max(candidates, [], s.n_perm_tdmi, s.alpha_tdmi)[:3]
 
     def scores(self, candidates, base, selected):
-        m = self.members[0]
-        return self._timed(m, m.scores, candidates, base, selected)
+        per = [self._timed(m, m.scores, candidates, base, selected) for m in self.members]
+        return {p: max(d[p] for d in per) for p in per[0]}
 
 
 def select_parents(data, target, embeddings=None, sources=None, settings=None, prng=None):
