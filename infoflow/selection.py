@@ -81,7 +81,14 @@ class SkeletonSettings:
     information on the raw values (log-ratio of regression residual variances, equal to
     Granger causality for Gaussian processes :cite:`Barnett2009`), as IDTxl does for
     vector-autoregressive data :cite:`Novelli2019`: far more powerful than symbols or
-    KSG when couplings are linear and weak, blind to nonlinear ones.
+    KSG when couplings are linear and weak, blind to nonlinear ones. Linear conditioning
+    leaves any nonlinear dependence on the conditioning set in the residual, and a free
+    permutation breaks the candidate's share of it, so the test is anti-conservative for
+    nonlinear targets; ``gaussian_null='local'`` permutes each candidate only among
+    samples with similar conditioning values (Runge's local permutation
+    :cite:`Runge2018`), which keeps that dependence under the null. It cannot supply a
+    nonlinear parent that a linear search never selects (a parent acting through
+    :math:`x^2`), so it is meant for ensembles with a nonparametric estimator.
 
     ``estimator='trend'`` keeps symbols (``trend_bins`` equal-frequency bins) but tests
     a stratified ordinal trend: one degree of freedom per candidate, so weak monotone
@@ -157,6 +164,7 @@ class SkeletonSettings:
     ksg_k: int = 4
     ksg_threads: int | None = None
     ksg_null: str = "local"
+    gaussian_null: str = "free"
     mixed_categorical: tuple | None = None
     mixed_max_categories: int = 10
     curtail: bool | None = None
@@ -184,6 +192,8 @@ class SkeletonSettings:
             check_n_perm(self.n_perm_tdmi, self.alpha_tdmi / k)
         if self.ksg_null not in ("permutation", "local"):
             raise ValueError("ksg_null must be 'permutation' or 'local'")
+        if self.gaussian_null not in ("free", "local"):
+            raise ValueError("gaussian_null must be 'free' or 'local'")
         if self.null not in ("free", "strata"):
             raise ValueError("null must be 'free' or 'strata'")
         if self.statistic not in ("raw", "debiased"):
@@ -424,6 +434,12 @@ class _GaussianColumns:
         q, ey, vy = self._basis(z)
         c = np.asarray(c, dtype=float).reshape(self.n, -1)
         return self._values_for(c[np.asarray(idx)], q, ey, vy)
+
+    def local_permutation(self, z, rng, k_perm=5):
+        """
+        Runge's local permutation in the conditioning set :cite:`Runge2018`.
+        """
+        return _knn_local_permutation(self._bases, self.n, z, rng, k_perm)
 
 
 class _AdaptiveColumns(_Columns):
@@ -685,15 +701,7 @@ class _KsgColumns:
         a distinct sample among its `k_perm` nearest neighbours in the conditioning set,
         so a candidate keeps its dependence on the conditioning set under the null.
         """
-        from scipy.spatial import KDTree
-
-        z = np.asarray(z, dtype=float).reshape(self.n, -1)
-        if z.shape[1] == 0:
-            return rng.permutation(self.n)
-        key = ("neighbors", z.shape, hash(z.tobytes()))
-        if key not in self._contexts:
-            self._contexts[key] = KDTree(z).query(z, k_perm, p=np.inf, workers=-1)[1].reshape(self.n, -1)
-        return _local_assignment(self._contexts[key], rng)
+        return _knn_local_permutation(self._contexts, self.n, z, rng, k_perm)
 
     def joint(self, variables):
         cols = [self.index[v] for v in variables]
@@ -739,6 +747,22 @@ class _KsgColumns:
         # Not clipped at zero: KSG is biased downward in high dimensions, and clipping
         # would tie weak true effects with the many null values clipped to zero.
         return float(value) / np.log(2)
+
+
+def _knn_local_permutation(cache, n, z, rng, k_perm=5):
+    """
+    Runge's local permutation in the continuous conditioning set `z` :cite:`Runge2018`,
+    with the neighbour lists cached in `cache`.
+    """
+    from scipy.spatial import KDTree
+
+    z = np.asarray(z, dtype=float).reshape(n, -1)
+    if z.shape[1] == 0:
+        return rng.permutation(n)
+    key = ("neighbors", z.shape, hash(z.tobytes()))
+    if key not in cache:
+        cache[key] = KDTree(z).query(z, k_perm, p=np.inf, workers=-1)[1].reshape(n, -1)
+    return _local_assignment(cache[key], rng)
 
 
 def _local_assignment(neighbors, rng):
@@ -1246,6 +1270,13 @@ def _make_perm(cols, settings, rng):
         def perm(z=None):
             return ksg.local_permutation(z, rng) if z is not None else free()
 
+    elif isinstance(cols, _GaussianColumns) and settings.gaussian_null == "local":
+        free, gauss = perm, cols
+
+        def perm(z=None):
+            return gauss.local_permutation(z, rng) if z is not None else free()
+
+        setattr(perm, "uses_condition", True)  # noqa: B010
     elif not isinstance(cols, _KsgColumns) and settings.null == "strata":
         from .stats import _within_strata
 

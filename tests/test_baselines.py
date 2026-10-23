@@ -56,3 +56,15 @@ def test_network_validation_compares_methods():
 def test_network_validation_lorenz96():
     ds = network_validation("lorenz96", n_nodes=(6,), n_samples=(1000,), n_reps=1, max_lag=1, methods=("var",), prng=0)
     assert float(ds["recall"].sel(algorithm="var", level="skeleton").squeeze()) > 0.3
+
+
+def test_var_coefficient_scores():
+    graph = random_network(5, 2.0, max_lag=2, prng=5)
+    data = simulate_network(graph, 3000, "var", prng=2) * np.array([1, 10, 100, 1, 1])
+    signed = var_granger(data, max_lag=2, score="coefficient", standardize=False)
+    absolute = var_granger(data, max_lag=2, score="abs_coefficient")
+    for s, t in graph.edges():
+        assert absolute.score[s, t] > 0.05
+    assert signed.found == var_granger(data, max_lag=2).found  # the tests do not depend on the score
+    with pytest.raises(ValueError):
+        var_granger(data, score="nope")

@@ -83,7 +83,9 @@ def test_load_causalrivers(tmp_path):
     (tmp_path / "ts.csv").write_text("\n".join(rows))
     data, graph, names = load_causalrivers(tmp_path / "ts.csv", tmp_path / "g.p", nodes=[102, 103, 104])
     assert names == ["102", "103", "104"]
-    assert data.shape == (2, 3)  # the row with a gap is dropped
+    assert data.shape == (3, 3) and data[1, 0] == 2.5  # the gap is interpolated
+    dropped, _, _ = load_causalrivers(tmp_path / "ts.csv", tmp_path / "g.p", nodes=[102, 103, 104], gaps="drop")
+    assert dropped.shape == (2, 3)
     assert set(graph.edges()) == {(0, 1), (2, 1)}
     assert graph.nodes[0]["station"] == 102
 
@@ -150,7 +152,9 @@ def test_causalrivers_subset_resamples_and_drops_gaps():
     values[1, 0] = np.nan
     values[4:6, 1] = np.nan
     g = nx.DiGraph([(7, 9)])
-    data, truth = causalrivers_subset(values, g, ["7", "9"], [7, 9], resample=2)
+    data, truth = causalrivers_subset(values, g, ["7", "9"], [7, 9], resample=2, gaps="drop")
     # Block means ignore missing values; the block with no value for station 9 is dropped.
     assert np.allclose(data, [[0.0, 2.0], [5.0, 6.0], [13.0, 14.0]])
+    filled, _ = causalrivers_subset(values, g, ["7", "9"], [7, 9], resample=2)
+    assert np.allclose(filled, [[0.0, 2.0], [5.0, 6.0], [9.0, 10.0], [13.0, 14.0]])
     assert set(truth.edges()) == {(0, 1)}

@@ -50,17 +50,19 @@ def _lagged(x, max_lag):
     return np.stack([x[max_lag - k : T - k] for k in range(1, max_lag + 1)], axis=1)  # (T', lag, P)
 
 
-def var_granger(data, max_lag=5, alpha=0.05):
+def var_granger(data, max_lag=5, alpha=0.05, score="te", standardize=True):
     """
     Pairwise-conditional linear Granger causality from a VAR(`max_lag`) fit.
 
     For each target, the full model regresses it on ``max_lag`` lags of every process;
-    each source's restricted model drops that source's lags. The score is the
-    Gaussian transfer entropy :math:`\\frac12 \\log(\\mathrm{RSS}_r / \\mathrm{RSS}_f)`
-    in nats :cite:`Barnett2009`, the p-value is the F-test of the restriction, links
-    are declared at Benjamini--Hochberg level `alpha` over all pairs
-    :cite:`Benjamini1995`, and the delay is the lag with the largest absolute
-    standardized coefficient.
+    each source's restricted model drops that source's lags. The p-value is the F-test
+    of the restriction, links are declared at Benjamini--Hochberg level `alpha` over all
+    pairs :cite:`Benjamini1995`, and the delay is the lag with the largest absolute
+    coefficient. The score is the Gaussian transfer entropy
+    :math:`\\frac12 \\log(\\mathrm{RSS}_r / \\mathrm{RSS}_f)` in nats :cite:`Barnett2009`
+    (``'te'``), or, as in the CausalRivers benchmark :cite:`Stein2025`, the largest
+    coefficient over the source's lags (``'coefficient'``, signed, so that only
+    positive effects rank high) or the largest absolute one (``'abs_coefficient'``).
 
     Parameters
     ----------
@@ -68,6 +70,10 @@ def var_granger(data, max_lag=5, alpha=0.05):
         (samples, processes).
     max_lag : int
     alpha : float
+    score : {'te', 'coefficient', 'abs_coefficient'}
+    standardize : bool
+        Z-score each process first (coefficients are then scale-free); CausalRivers'
+        VAR fits the raw values.
 
     Returns
     -------
@@ -75,13 +81,16 @@ def var_granger(data, max_lag=5, alpha=0.05):
     """
     from .stats import benjamini_hochberg
 
+    if score not in ("te", "coefficient", "abs_coefficient"):
+        raise ValueError("score must be 'te', 'coefficient', or 'abs_coefficient'")
     x = np.asarray(data, dtype=float)
-    x = (x - x.mean(axis=0)) / np.where(x.std(axis=0) > 0, x.std(axis=0), 1.0)
+    if standardize:
+        x = (x - x.mean(axis=0)) / np.where(x.std(axis=0) > 0, x.std(axis=0), 1.0)
     T, P = x.shape
     L = _lagged(x, max_lag)
     n = len(L)
     X = np.column_stack([np.ones(n), L.reshape(n, -1)])  # column 1 + k * P + p is (lag k + 1, process p)
-    score = np.zeros((P, P))
+    score_kind, score = score, np.zeros((P, P))
     pvalue = np.ones((P, P))
     delay = np.zeros((P, P), dtype=np.int64)
     df_full = n - X.shape[1]
@@ -96,7 +105,12 @@ def var_granger(data, max_lag=5, alpha=0.05):
             keep = np.setdiff1d(np.arange(X.shape[1]), cols)
             br, *_ = np.linalg.lstsq(X[:, keep], y, rcond=None)
             rss_r = float(np.sum((y - X[:, keep] @ br) ** 2))
-            score[s, t] = 0.5 * np.log(max(rss_r, 1e-300) / max(rss_f, 1e-300))
+            if score_kind == "te":
+                score[s, t] = 0.5 * np.log(max(rss_r, 1e-300) / max(rss_f, 1e-300))
+            elif score_kind == "coefficient":
+                score[s, t] = float(np.max(beta[cols]))
+            else:
+                score[s, t] = float(np.max(np.abs(beta[cols])))
             F = ((rss_r - rss_f) / max_lag) / (rss_f / df_full) if rss_f > 0 else np.inf
             pvalue[s, t] = float(stats.f.sf(F, max_lag, df_full))
             delay[s, t] = 1 + int(np.argmax(np.abs(beta[cols])))
@@ -155,10 +169,13 @@ def tigramite_baseline(data, max_lag=5, method="pcmciplus", alpha=0.01):  # prag
 
 def run_baseline(method, data, max_lag=5, alpha=0.05):
     """
-    Run a baseline by name: ``'var'``, ``'pcmciplus'``, or ``'lpcmci'``.
+    Run a baseline by name: ``'var'``, ``'var-coef'`` (CausalRivers' signed coefficients
+    on raw values), ``'pcmciplus'``, or ``'lpcmci'``.
     """
     if method == "var":
         return var_granger(data, max_lag=max_lag, alpha=alpha)
+    if method == "var-coef":
+        return var_granger(data, max_lag=max_lag, alpha=alpha, score="coefficient", standardize=False)
     if method in ("pcmciplus", "lpcmci"):
         return tigramite_baseline(data, max_lag=max_lag, method=method, alpha=alpha)
     raise ValueError(f"unknown baseline {method!r}")

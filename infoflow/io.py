@@ -235,7 +235,22 @@ def _resample(values, block):
     return np.where(counts > 0, means, np.nan)
 
 
-def causalrivers_subset(values, graph, stations, nodes, resample=1):
+def _interpolate(values):
+    """
+    Linear interpolation of interior gaps per column; rows before the first or after the
+    last complete row are trimmed.
+    """
+    out = values.copy()
+    t = np.arange(len(out))
+    for j in range(out.shape[1]):
+        ok = ~np.isnan(out[:, j])
+        if ok.sum() >= 2:
+            out[:, j] = np.interp(t, t[ok], out[ok, j], left=np.nan, right=np.nan)
+    complete = np.flatnonzero(~np.isnan(out).any(axis=1))
+    return out[complete[0] : complete[-1] + 1] if len(complete) else out[:0]
+
+
+def causalrivers_subset(values, graph, stations, nodes, resample=1, gaps="interpolate"):
     """
     The series and induced ground truth of a subset of CausalRivers stations.
 
@@ -248,11 +263,15 @@ def causalrivers_subset(values, graph, stations, nodes, resample=1):
     resample : int
         Average blocks of this many samples (NaN-aware), e.g. 24 for 6-hour
         resolution of the 15-minute data.
+    gaps : {'interpolate', 'drop'}
+        Fill remaining gaps by linear interpolation, as the benchmark's own
+        preprocessing does (default), or drop incomplete rows, which splices
+        separate stretches of time together.
 
     Returns
     -------
     data : numpy.ndarray
-        (time, len(nodes)); rows with missing values are dropped.
+        (time, len(nodes)).
     graph : networkx.DiGraph
         The induced ground truth relabelled ``0..len(nodes)-1`` in the order of `nodes`,
         each node carrying its station id as ``station``.
@@ -263,7 +282,12 @@ def causalrivers_subset(values, graph, stations, nodes, resample=1):
     sub = values[:, [columns[_station(n)] for n in nodes]].astype(float)
     if resample > 1:
         sub = _resample(sub, resample)
-    sub = sub[~np.isnan(sub).any(axis=1)]
+    if gaps == "interpolate":
+        sub = _interpolate(sub)
+    elif gaps == "drop":
+        sub = sub[~np.isnan(sub).any(axis=1)]
+    else:
+        raise ValueError("gaps must be 'interpolate' or 'drop'")
     relabelled = nx.relabel_nodes(graph.subgraph(nodes).copy(), {n: k for k, n in enumerate(nodes)})
     truth = nx.DiGraph()
     truth.add_nodes_from((k, {"station": n}) for k, n in enumerate(nodes))
@@ -271,7 +295,7 @@ def causalrivers_subset(values, graph, stations, nodes, resample=1):
     return sub, truth
 
 
-def load_causalrivers(ts_csv, graph_pickle, nodes=None, resample=1):
+def load_causalrivers(ts_csv, graph_pickle, nodes=None, resample=1, gaps="interpolate"):
     """
     River-discharge series and ground truth from CausalRivers :cite:`Stein2025`.
 
@@ -286,11 +310,13 @@ def load_causalrivers(ts_csv, graph_pickle, nodes=None, resample=1):
         present in both files).
     resample : int
         Average blocks of this many samples (see :func:`causalrivers_subset`).
+    gaps : {'interpolate', 'drop'}
+        See :func:`causalrivers_subset`.
 
     Returns
     -------
     data : numpy.ndarray
-        (time, len(nodes)); rows with missing values are dropped.
+        (time, len(nodes)).
     graph : networkx.DiGraph
         The induced ground truth relabelled ``0..len(nodes)-1`` in the order of `nodes`,
         each node carrying its station id as ``station``.
@@ -300,7 +326,7 @@ def load_causalrivers(ts_csv, graph_pickle, nodes=None, resample=1):
     present = set(stations)
     if nodes is None:
         nodes = [n for n in full.nodes if _station(n) in present]
-    data, truth = causalrivers_subset(values, full, stations, nodes, resample)
+    data, truth = causalrivers_subset(values, full, stations, nodes, resample, gaps)
     return data, truth, [str(n) for n in nodes]
 
 

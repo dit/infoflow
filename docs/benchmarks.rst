@@ -171,15 +171,35 @@ Subgraphs, resolution     infer  VAR    PCMCI+
 5 nodes, 1 day            0.56   0.62   0.58
 ========================  =====  =====  ======
 
-The paper's best-tuned VAR reaches 0.82 and 0.80 on its full Random-3 and Random-5
-sets, choosing resolution, lag, normalization, and coefficient handling with the
-labels; with one fixed configuration our VAR is lower, and ``infer`` trails it by
-0.03-0.07, at PCMCI+'s level. Its precision here is 0.24-0.41: discharge is smooth,
-strongly autocorrelated, and driven by shared weather, so coarse symbols leave most
-of each station's memory unconditioned and stations appear to predict each other.
-Pinning the Gaussian estimator or turning network resolution off did not help on a
-sample of these graphs. On this real-world benchmark, unlike the synthetic ones,
-``infer`` is not competitive with the linear baseline.
+(These runs dropped incomplete rows, which splices separate stretches of time
+together; :func:`~infoflow.io.causalrivers_subset` now interpolates gaps as the
+benchmark's own preprocessing does.)
+
+*Reproducing the linear baseline.* The paper's VAR scores a link by its largest
+lagged coefficient fitted on the raw discharge (``var_granger(score="coefficient",
+standardize=False)``, ``'var-coef'`` in :func:`~infoflow.baselines.run_baseline`).
+Over 200 random subgraphs per size and a grid of resolution, lag, scaling, and score,
+it reaches 0.79 (three nodes) and 0.76 (five nodes), against the paper's 0.82 and 0.80
+on its full, enumerated sets. Nearly all of that comes from raw units: at 6 hours,
+raw coefficients give 0.78-0.79 and 0.76, standardized coefficients 0.59-0.60, and the
+scale-free transfer-entropy score 0.73 and 0.69. Downstream discharge is roughly the
+sum of upstream discharge, so in raw units upstream-to-downstream coefficients are
+large and the reverse small; the paper's naive baseline that orders stations by mean
+discharge, with no dynamics at all, scores 0.79 and 0.75. infoflow is rank-based by
+design and ignores that cue, so the fair comparison is the scale-free VAR.
+
+*Against the scale-free VAR* (forty three-node subgraphs, 6 hours, gaps interpolated,
+mean AUROC): VAR with raw coefficients 0.75, VAR transfer entropy 0.69, ``infer`` 0.62,
+infoflow selecting with the Gaussian estimator only 0.69, and ``infer`` with the
+Gaussian estimator kept for every target under the local permutation null
+(``estimator=("plugin", "gaussian"), gaussian_null="local"``) 0.73. ``infer``'s
+linearity test flags discharge as nonlinear and drops the Gaussian estimator, leaving
+the plug-in, which smooth, strongly autocorrelated series defeat. Keeping it with the
+local null does not reintroduce the false links on MuTE (precision 1.00, against 0.65
+with the free null), but it is not the default: on Lorenz-96 the linear member
+misleads the joint search (24 of 24 links and AUROC 1.00 with the plug-in alone, 10 of
+24 and 0.70 with both). Which estimator suits a target is data-dependent, and a rule
+that chooses it reliably is open.
 
 Latent confounding
 ------------------
