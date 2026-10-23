@@ -119,6 +119,16 @@ def _adaptive(x, y, z, bins):
     return cmi_from_joint(joint_table(dense_codes(yc)[0], dense_codes(xc)[0], dense_codes(zc)[0]), "plugin")
 
 
+def _hierarchical(table, rng, components=1):
+    """
+    Posterior-mean CMI under the hierarchical Dirichlet model of :mod:`infoflow.bayes`.
+    """
+    from .bayes import fit_context_prior, posterior_tables
+
+    prior = fit_context_prior(table, components, draws=300, tune=300, prng=rng)
+    return float(np.mean([cmi_from_joint(p) for p in posterior_tables(table, prior, 100, rng)]))
+
+
 def _estimate(x, y, z, estimator, kind, bins, k, rng):
     if estimator == "adaptive":
         return _adaptive(x, y, z, bins)
@@ -133,6 +143,10 @@ def _estimate(x, y, z, estimator, kind, bins, k, rng):
     yc, _ = dense_codes(y)
     xc, _ = dense_codes(x)
     zc, _ = dense_codes(z)
+    if estimator == "hierarchical":
+        return _hierarchical(joint_table(yc, xc, zc), rng)
+    if estimator == "mixture":
+        return _hierarchical(joint_table(yc, xc, zc), rng, components=4)
     return cmi_from_joint(joint_table(yc, xc, zc), estimator)
 
 
@@ -154,12 +168,14 @@ def conditioning_scaling(
     ----------
     kind : {'discrete', 'gaussian'}
         See :func:`scaling_data`.
-    estimators : sequence of {'plugin', 'miller_madow', 'adaptive', 'ksg'}
+    estimators : sequence of {'plugin', 'miller_madow', 'adaptive', 'ksg', 'hierarchical', 'mixture'}
         Plug-in and Miller--Madow estimates use the symbols (Gaussian data are cut
         into `bins` equal-frequency bins per variable); ``'adaptive'`` bins the target
         and source the same way and partitions the conditioning set by MDL together
         with the target (:mod:`infoflow.adaptive`); KSG uses the raw values with `k`
-        neighbours.
+        neighbours; ``'hierarchical'`` is the posterior mean under the hierarchical
+        Dirichlet model of :mod:`infoflow.bayes` on the same symbols, and ``'mixture'``
+        the same with a four-component mixture prior (both need pymc).
     n_samples, dims : sequences of int
     n_reps : int
         Independent datasets per (sample size, dimension).

@@ -36,6 +36,8 @@ from .crossfit import crossfit_flows
 from .measures import EdgeFlow, _degrade, cmi_from_joint, dense_codes, intrinsic_flow, joint_table, layers_from_values
 
 __all__ = (
+    "BAYES_OPTIONS",
+    "BAYES_THRESHOLD",
     "LAYERS",
     "LayerStatistics",
     "adjust_layer_pvalues",
@@ -44,6 +46,13 @@ __all__ = (
 
 LAYERS = ("intrinsic", "synergistic", "shared")
 _EPS = 1e-6
+
+#: :func:`~infoflow.bayes.layer_posterior` settings for ``layer_method='bayes'``: two
+#: mixture components and one short chain were as accurate as more of either.
+BAYES_OPTIONS = {"components": 2, "draws": 100, "tune": 100, "chains": 1, "n_draws": 50}
+
+#: Samples per observed context value below which ``layer_method='auto'`` is Bayesian.
+BAYES_THRESHOLD = 50
 
 
 @dataclass
@@ -60,6 +69,8 @@ class LayerStatistics:
     pvalue : dict
         ``layer -> p`` for the intrinsic, synergistic, and shared layers being positive.
     n_boot, n_null : int
+    method : {'crossfit', 'bayes'}
+        How the point estimates and intervals were obtained.
     """
 
     flow: EdgeFlow
@@ -67,6 +78,7 @@ class LayerStatistics:
     pvalue: dict = field(default_factory=dict)
     n_boot: int = 0
     n_null: int = 0
+    method: str = "crossfit"
 
 
 def _layers_on_table(table, mapping, n_clusters, estimator, initial, prng):
@@ -124,10 +136,22 @@ def layer_statistics(
     merge=True,
     merge_alpha=0.01,
     gap=0,
+    layer_method="crossfit",
+    bayes_threshold=BAYES_THRESHOLD,
     prng=None,
 ):
     """
-    Cross-fitted layers with bootstrap intervals and per-layer p-values.
+    Cross-fitted (or Bayesian) layers with intervals and per-layer p-values.
+
+    With ``layer_method='bayes'`` the point estimates are posterior means and the
+    intervals equal-tailed credible intervals under the two-component hierarchical
+    Dirichlet mixture of :func:`~infoflow.bayes.layer_posterior` (one short NUTS chain,
+    :data:`BAYES_OPTIONS`), and no bootstrap is run. It is markedly more accurate when
+    contexts are sparse (below roughly 60 samples per context value) and agrees with
+    cross-fitting otherwise; ``'auto'`` uses it only for edges with fewer than
+    `bayes_threshold` samples per observed context value. The p-values always come from
+    the nulls below, gated by the cross-fitted estimates, since posterior mass near
+    zero is not a test :cite:`Archer2013`. Needs pymc (``pip install infoflow[bayes]``).
 
     Parameters
     ----------
@@ -143,12 +167,19 @@ def layer_statistics(
         Mean bootstrap block length (default ``N ** (1/3)``).
     estimator, merge, merge_alpha, gap
         As in :func:`~infoflow.crossfit.crossfit_flows`.
+    layer_method : {'crossfit', 'bayes', 'auto'}
+        How the point estimates and intervals are obtained (see above).
+    bayes_threshold : float
+        With ``'auto'``, the samples per observed context value below which the
+        Bayesian estimates are used.
     prng : None, int, Generator
 
     Returns
     -------
     LayerStatistics
     """
+    if layer_method not in ("crossfit", "bayes", "auto"):
+        raise ValueError(f"Unknown layer_method {layer_method!r}; use 'crossfit', 'bayes', or 'auto'.")
     rng = as_generator(prng)
     flow = crossfit_flows(y, x, w, estimator=estimator, merge=merge, merge_alpha=merge_alpha, gap=gap, prng=rng)
     y, Ky = dense_codes(y)
@@ -162,9 +193,10 @@ def layer_statistics(
     _, Q = intrinsic_flow(merged, prng=rng)
     observed = _layers_on_table(full, mapping, n_clusters, estimator, Q, rng)
 
-    stats = LayerStatistics(flow, n_boot=n_boot, n_null=n_null)
+    bayes = layer_method == "bayes" or (layer_method == "auto" and len(y) < bayes_threshold * Kw)
+    stats = LayerStatistics(flow, n_boot=0 if bayes else n_boot, n_null=n_null, method="bayes" if bayes else "crossfit")
     names = ("te", "tdmi", *LAYERS)
-    if n_boot:
+    if n_boot and not bayes:
         samples = {k: [] for k in names}
         for idx in stationary_bootstrap(np.arange(len(y)), n_boot, mean_block_length, rng):
             table = joint_table(y[idx], x[idx], w[idx], shape)
@@ -207,6 +239,12 @@ def layer_statistics(
     for layer in LAYERS:
         if layer in stats.pvalue and point[layer] <= _EPS:
             stats.pvalue[layer] = 1.0
+    if bayes:
+        from .bayes import layer_posterior
+
+        post = layer_posterior(y, x, w, prng=rng, **BAYES_OPTIONS)
+        stats.flow = post.as_flow()
+        stats.ci = post.interval(confidence)
     return stats
 
 
