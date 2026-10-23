@@ -146,6 +146,59 @@ claims ("this link is synergistic") only where that layer's own test is signific
 The edge-level gate controls errors for the existence of a link, not for its
 composition.
 
+## 4. Example networks
+
+One network per benchmark, the instance with median recall rather than the best.
+Each figure shows the ground truth (left), what edge-level gating reports (centre:
+every layer of each link whose transfer entropy passed selection, and the intrinsic
+and shared layers of shared-only links), and what per-layer testing confirms (right).
+Each arrow is a glyph of the decomposition: its red core is intrinsic flow, the blue
+body around the core is synergistic flow, and the green halo is shared flow; widths
+are proportional to bits, and links with shared flow only appear as faint green
+arrows. Node positions are shared across the three panels. (`validation/layer_figures.py`.)
+
+![XOR motif](figures/motif__xor__0.png)
+
+**XOR.** Both inputs reach x2 as pure synergy, with no intrinsic core, and both
+approaches agree.
+
+![Common-driver motif](figures/motif__common_driver__0.png)
+
+**Common driver.** x2's links to its two children are intrinsic; the confounded pair
+x0 → x1 appears only as a shared-flow link, as designed.
+
+![MuTE network](figures/mute__0.png)
+
+**MuTE.** Four of the five links are found, all with confirmed intrinsic flow (x4 → x3
+is missed). Edge gating adds a synergistic body to x0 → x3 that its test does not
+confirm. The many faint green links are shared flow among the driver's descendants.
+
+![VAR network](figures/synthetic__var__2.png)
+
+**VAR network.** 17 of 24 links found, none false. By point estimate 8 of them are
+synergy-dominated (the blue bodies in the centre); per-layer testing confirms synergy
+on none and intrinsic flow on 12, as expected for linear additive coupling.
+
+![Lorenz-96 ring](figures/synthetic__lorenz96__0.png)
+
+**Lorenz-96.** All 30 ring links are found. All are synergy-dominated by point
+estimate and 24 have synergy confirmed by its test, matching the multiplicative
+coupling; the small intrinsic cores of the centre panel survive their tests on only 8. The dense web of shared-only links reflects ring-wide correlation; few of
+them are true links.
+
+![NetSim network](figures/netsim__sim5__3.png)
+
+**NetSim.** Two links are selected: x0 → x1, which is true, and x2 → x1, the reverse of
+the true x1 → x2. The centre panel's other arrows are shared-only links. Its synergy
+on x0 → x1 is not confirmed; the per-layer panel keeps the intrinsic cores.
+
+![CausalRivers network](figures/rivers__n5__2.png)
+
+**CausalRivers.** Two of four links are found (x1 → x0, x3 → x4). The three false links
+are downstream shortcuts (x0 → x3 bypasses x2, x0 → x4 bypasses x2 and x3, x1 → x2
+bypasses x0), consistent with smooth discharge whose memory coarse symbols cannot
+condition away. Nearly all flow is shared, as in Section 2.
+
 ## Caveats
 
 - Small samples: 3-5 networks per synthetic setting, 5 subjects per NetSim simulation,
