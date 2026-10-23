@@ -189,17 +189,22 @@ discharge, with no dynamics at all, scores 0.79 and 0.75. infoflow is rank-based
 design and ignores that cue, so the fair comparison is the scale-free VAR.
 
 *Against the scale-free VAR* (forty three-node subgraphs, 6 hours, gaps interpolated,
-mean AUROC): VAR with raw coefficients 0.75, VAR transfer entropy 0.69, ``infer`` 0.62,
+mean AUROC): VAR with raw coefficients 0.75, VAR transfer entropy 0.69, ``infer`` with
+its earlier rule 0.62,
 infoflow selecting with the Gaussian estimator only 0.69, and ``infer`` with the
 Gaussian estimator kept for every target under the local permutation null
-(``estimator=("plugin", "gaussian"), gaussian_null="local"``) 0.73. ``infer``'s
-linearity test flags discharge as nonlinear and drops the Gaussian estimator, leaving
-the plug-in, which smooth, strongly autocorrelated series defeat. Keeping it with the
+(``estimator=("plugin", "gaussian"), gaussian_null="local"``) 0.73. That rule
+dropped the Gaussian estimator for every target that tests nonlinear, as discharge
+does, leaving the plug-in, which smooth, strongly autocorrelated series defeat. Keeping it with the
 local null does not reintroduce the false links on MuTE (precision 1.00, against 0.65
 with the free null), but it is not the default: on Lorenz-96 the linear member
 misleads the joint search (24 of 24 links and AUROC 1.00 with the plug-in alone, 10 of
-24 and 0.70 with both). Which estimator suits a target is data-dependent, and a rule
-that chooses it reliably is open.
+24 and 0.70 with both). ``infer`` now chooses per target: a target that tests
+nonlinear keeps the Gaussian estimator, with the local null, only if the parents it
+selects alone predict the target at least as well as the plug-in's by
+nearest-neighbour regression (:doc:`auto`). On the same forty graphs this gives 0.70,
+above the scale-free VAR, while Lorenz-96 keeps the plug-in alone (recall 1.00) and
+the logistic maps improve (AUROC 0.93 to 0.97).
 
 Latent confounding
 ------------------

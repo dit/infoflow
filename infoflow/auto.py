@@ -8,8 +8,11 @@ residual dependence makes its tests anti-conservative (false links between the
 children of a nonlinear driver). The plug-in CMI on the preprocessing symbols is far
 less powerful but stays precise. :func:`infer` therefore always selects with the
 plug-in and adds the Gaussian estimator, in one greedy search at a Bonferroni-split
-level (:class:`~infoflow.selection.SkeletonSettings`), only for targets whose
-dynamics pass a test for neglected nonlinearity (:func:`linearity_pvalues`). Every
+level (:class:`~infoflow.selection.SkeletonSettings`), for targets whose dynamics
+pass a test for neglected nonlinearity (:func:`linearity_pvalues`); a target that
+fails it keeps the Gaussian estimator, under the local permutation null, only if the
+parents the Gaussian estimator selects alone predict it at least as well as the
+plug-in's, by nearest-neighbour regression (:func:`parent_prediction_error`). Every
 stage is tested at the strict level 0.001. It times the selection on a
 few sampled targets first (the pilot, whose skeletons are reused), predicts the cost
 of the whole run, and, if a ``time_budget`` is given, drops the most expensive options
@@ -38,7 +41,7 @@ from .network import estimate_edge, infer_multiplex
 from .parallel import thread_map
 from .selection import SkeletonSettings, select_parents
 
-__all__ = ("PRESETS", "AutoReport", "AutoResult", "infer", "linearity_pvalues")
+__all__ = ("PRESETS", "AutoReport", "AutoResult", "infer", "linearity_pvalues", "parent_prediction_error")
 
 #: Selection significance level: precision stayed near 1 for every estimator at this level.
 ALPHA = 0.001
@@ -71,8 +74,8 @@ PRESETS = {
     },
 }
 
-#: Level of the neglected-nonlinearity test that gates the Gaussian estimator; lenient,
-#: since a false alarm only falls back to the plug-in.
+#: Level of the neglected-nonlinearity test after which the Gaussian estimator must earn
+#: its place by held-out prediction; lenient, since a false alarm only costs time.
 LINEARITY_ALPHA = 0.05
 
 # Heuristic cost factors for options the pilot does not time directly.
@@ -143,10 +146,13 @@ class AutoReport:
             f"time: predicted {fmt(self.predicted_seconds)}, actual {fmt(self.actual_seconds)}, "
             f"budget {fmt(self.time_budget)}",
         ]
-        if d.get("nonlinear_targets") is not None:
+        if d.get("nonlinear_targets"):
+            kept = d.get("gaussian_kept", [])
+            dropped = [t for t in d["nonlinear_targets"] if t not in kept]
             lines.append(
-                f"Gaussian selection gated off for {len(d['nonlinear_targets'])} target(s) that test nonlinear: "
-                + ", ".join(map(str, d["nonlinear_targets"]))
+                f"{len(d['nonlinear_targets'])} target(s) test nonlinear; Gaussian selection dropped for "
+                f"{', '.join(map(str, dropped)) or 'none'} and kept with a local permutation null for "
+                f"{', '.join(map(str, kept)) or 'none'} (by held-out prediction of their parents)"
             )
         if d.get("network_resolution"):
             n = d["network_resolution"]
@@ -250,6 +256,55 @@ def _diagnose(trials, names, prng, max_lag=None, network_resolution=False):
         if flags:
             diagnostics["flagged"][node.name] = flags
     return result.data, result.embeddings, result.report, diagnostics
+
+
+def parent_prediction_error(data, target, variables, folds=5, k_fraction=0.02):
+    """
+    Blocked cross-validated mean squared error of predicting `target`'s raw present from
+    `variables` (raw values, standardized) by nearest-neighbour regression.
+
+    A nonparametric referee for comparing parent sets chosen by different estimators:
+    it assumes no functional form, so neither estimator's assumptions decide.
+    """
+    from scipy.spatial import KDTree
+
+    from .data import realizations
+    from .selection import _raw_columns
+
+    variables = list(variables)
+    r = realizations(data, target, variables, max_lag=max([lag for _, lag in variables] + [1]))
+    y, X = _raw_columns(data, r, target)
+    if X.shape[1]:
+        X = (X - X.mean(axis=0)) / np.where(X.std(axis=0) > 0, X.std(axis=0), 1.0)
+    n = len(y)
+    fold = np.minimum(folds - 1, (folds * np.arange(n) / max(n, 1)).astype(np.int64))
+    error = 0.0
+    for f in range(folds):
+        train, test = fold != f, fold == f
+        if not test.any() or train.sum() < 10:
+            continue
+        if X.shape[1] == 0:
+            error += float(np.sum((y[test] - y[train].mean()) ** 2))
+            continue
+        k = max(5, int(k_fraction * train.sum()))
+        neighbors = KDTree(X[train]).query(X[test], k)[1].reshape(int(test.sum()), -1)
+        error += float(np.sum((y[test] - y[train][neighbors].mean(axis=1)) ** 2))
+    return error / max(n, 1)
+
+
+def _gaussian_ratio(data, target, embeddings, plugin_settings, gaussian_settings, seed):
+    """
+    The nearest-neighbour prediction error of the Gaussian estimator's parent set over the
+    plug-in's, each selected alone.
+    """
+
+    def chosen(settings):
+        sk = select_parents(data, target, embeddings, None, settings, seed)
+        return list(sk.target_past) + (list(sk.sources) if sk.significant else [])
+
+    plugin = parent_prediction_error(data, target, chosen(plugin_settings))
+    gaussian = parent_prediction_error(data, target, chosen(gaussian_settings))
+    return gaussian / plugin if plugin > 0 else 1.0
 
 
 def linearity_pvalues(data, targets=None, max_lag=5, max_regressors=None, bins=4):
@@ -564,10 +619,34 @@ def infer(
     device = pinned_infer.pop("device", device)
     report = AutoReport(diagnostics=diagnostics, preset=preset, time_budget=budget)
 
+    # For targets that test nonlinear, select once with the plug-in alone and once with the
+    # Gaussian estimator alone (local null), and keep the Gaussian estimator only where its
+    # parents predict the target at least as well by a nonparametric referee.
+    keep_gaussian, drop_gaussian = [], list(nonlinear)
+    if nonlinear:
+        pinned_base = {k: v for k, v in pinned_skeleton.items() if k != "estimator"}
+        plugin_alone = _skeleton_settings(("plugin",), options["prescreen"], 1, device, pinned_base)
+        gaussian_alone = _skeleton_settings(
+            ("gaussian",), options["prescreen"], 1, device, {"gaussian_null": "local", **pinned_base}
+        )
+        choice_seeds = as_generator(run_seed + 2).integers(0, 2**32, size=len(nonlinear))
+
+        def ratio(args):
+            t, seed = args
+            return t, _gaussian_ratio(discrete, t, embeddings, plugin_alone, gaussian_alone, int(seed))
+
+        ratios = dict(thread_map(threads)(ratio, list(zip(nonlinear, choice_seeds, strict=True))))
+        keep_gaussian = [t for t in nonlinear if ratios[t] < 1.0]
+        drop_gaussian = [t for t in nonlinear if ratios[t] >= 1.0]
+        diagnostics["gaussian_ratio"] = ratios
+        diagnostics["gaussian_kept"] = keep_gaussian
+
     def settings_for(opts, ksg_threads_divisor):
         pinned = {k: v for k, v in pinned_skeleton.items() if k != "estimator"}
+        if keep_gaussian and "gaussian" in opts["estimators"]:
+            pinned.setdefault("gaussian_null", "local")
         reduced = tuple(e for e in opts["estimators"] if e != "gaussian")
-        per_target = dict.fromkeys(nonlinear, reduced) if "gaussian" in opts["estimators"] and reduced else {}
+        per_target = dict.fromkeys(drop_gaussian, reduced) if "gaussian" in opts["estimators"] and reduced else {}
         return _skeleton_settings(
             opts["estimators"], opts["prescreen"], ksg_threads_divisor, device, pinned, per_target
         )
@@ -609,7 +688,7 @@ def infer(
     interpret_seconds = (time.perf_counter() - start) / len(pilot_targets)
     pilot = {
         "concurrency": min(threads, len(pilot_targets)),
-        "usage": {"gaussian": 1.0 - len(nonlinear) / len(targets)} if targets else {},
+        "usage": {"gaussian": 1.0 - len(drop_gaussian) / len(targets)} if targets else {},
         "targets": pilot_targets,
         "interpret_seconds": interpret_seconds,
         "member_seconds": member_seconds,
