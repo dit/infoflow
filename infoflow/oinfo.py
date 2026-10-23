@@ -34,6 +34,7 @@ from itertools import combinations
 import dit
 import numpy as np
 import xarray as xr
+from dit.multivariate import o_information
 
 from .measures import dense_codes
 
@@ -70,7 +71,7 @@ def _omega(columns):
     codes = np.stack(columns, axis=1)
     keys, counts = np.unique(codes, axis=0, return_counts=True)
     d = dit.Distribution([tuple(int(v) for v in k) for k in keys], counts / counts.sum())
-    return float(dit.multivariate.o_information(d))
+    return float(o_information(d))
 
 
 def _as_data(data, preprocess, history, prng):

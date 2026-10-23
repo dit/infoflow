@@ -295,7 +295,7 @@ def test_gaussian_local_null_in_the_ensemble_avoids_false_links():
 
     data, embeddings, _ = _as_discrete(datasets.mute_network(3000, seed=0), None, "auto", 5, 0)
     stages = ("max_stat", "min_stat", "omnibus", "max_seq", "pairs")
-    strict = {**{f"alpha_{s}": 0.001 for s in stages}, **{f"n_perm_{s}": 2000 for s in stages}}
+    strict: dict[str, Any] = {**{f"alpha_{s}": 0.001 for s in stages}, **{f"n_perm_{s}": 2000 for s in stages}}
 
     def false_links(null):
         settings = SkeletonSettings(estimator=("plugin", "gaussian"), gaussian_null=null, curtail=True, **strict)
