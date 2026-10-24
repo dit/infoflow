@@ -34,6 +34,7 @@ and false-discovery-rate control.
    interpretation
    hyperedges
    machines
+   channels
    drawing
    workflow
    gpu

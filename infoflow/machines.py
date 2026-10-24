@@ -14,7 +14,9 @@ Channel quantities are defined relative to a driving input process
 :cite:`Barnett2015`; here the driver is the inferred ε-machine of the transducer's
 own input sequence. They describe the channel as if driven by an independent copy
 of its input, so in feedback loops they are not quantities of the observed joint
-process (use :class:`~infoflow.network_model.NetworkModel` for that).
+process (use :class:`~infoflow.network_model.NetworkModel` for that). Each edge
+transducer's capacity, without and with feedback, needs no driver: it is bracketed
+for the transducer as a finite-state channel (:func:`transducer_capacity`).
 """
 
 import time
@@ -29,7 +31,7 @@ from .data import DiscreteData, as_trials
 if TYPE_CHECKING:
     from .network_model import NetworkModel
 
-__all__ = ("MachineLayer", "MachineSettings", "infer_machines")
+__all__ = ("MachineLayer", "MachineSettings", "infer_machines", "transducer_capacity")
 
 
 def _require_sofic():
@@ -90,6 +92,13 @@ class MachineSettings:
     exact_flows : bool
         Compute exact per-edge flows of the composed model, when it fits under
         `max_composed_states`.
+    capacity : bool
+        Bracket each edge transducer's capacity without and with feedback
+        (:func:`transducer_capacity`). The no-feedback bracket takes seconds to tens of
+        seconds per edge with memory.
+    capacity_options, feedback_capacity_options : dict
+        Keyword arguments of :func:`sofic.generators.capacity.capacity` and
+        :func:`sofic.generators.capacity.feedback_capacity`.
     """
 
     symbols: str = "present"
@@ -106,6 +115,9 @@ class MachineSettings:
     excess_entropy: bool = True
     max_composed_states: int = 4096
     exact_flows: bool = True
+    capacity: bool = True
+    capacity_options: dict = field(default_factory=dict)
+    feedback_capacity_options: dict = field(default_factory=dict)
 
     def __post_init__(self):
         if self.symbols not in ("present", "past"):
@@ -137,7 +149,10 @@ class MachineLayer:
         ``channel_C`` (channel statistical complexity), ``driven_h`` (driven entropy
         rate, from entropy-rate bounds converged to 0.001 bits), ``te_model`` (:func:`driven_transfer_entropy`), ``te_gap`` (``te_model``
         minus the network's ``weight[te]``), ``edge_n_symbols``, ``edge_stability``,
-        and ``admitted_by`` (the selection estimators that admitted the source). With
+        ``admitted_by`` (the selection estimators that admitted the source), and, with
+        ``capacity``, the brackets ``capacity_low`` / ``capacity_high`` and
+        ``feedback_capacity_low`` / ``feedback_capacity_high`` of the transducer's
+        capacity without and with feedback (:func:`transducer_capacity`). With
         the composed model, ``model_te``, ``model_tdmi``, ``model_intrinsic``,
         ``model_synergistic``, ``model_shared``, ``model_di``: the exact flows (and
         one-step directed information) of :class:`~infoflow.network_model.NetworkModel`.
@@ -226,12 +241,14 @@ class MachineLayer:
                 row += f"   {_fmt_int(n['target_n_states'])}  {float(n['target_C']):6.3f}  {float(n['target_te']):6.3f}"
             lines.append(row)
         if self.edges:
-            lines.append("source -> target  states  channel_C  te_model  te_gap  admitted_by")
+            lines.append("source -> target  states  channel_C  te_model  te_gap     capacity  fb_capacity  admitted_by")
             for src, tgt in sorted(self.edges):
                 e = ds.sel(source=src, target=tgt)
                 lines.append(
                     f"{src:>6} -> {tgt:<6}  {_fmt_int(e['edge_n_states'])}  {float(e['channel_C']):9.3f}  "
-                    f"{float(e['te_model']):8.3f}  {float(e['te_gap']):6.3f}  {e['admitted_by'].item()}"
+                    f"{float(e['te_model']):8.3f}  {float(e['te_gap']):6.3f}  "
+                    f"{_fmt_bracket(e, 'capacity')}  {_fmt_bracket(e, 'feedback_capacity')}  "
+                    f"{e['admitted_by'].item()}"
                 )
         lines += [f"skipped {kind} {key}: {reason}" for (kind, key), reason in self.skipped.items()]
         return "\n".join(lines)
@@ -240,6 +257,13 @@ class MachineLayer:
 def _fmt_int(value):
     value = float(value)
     return f"{int(value):6d}" if np.isfinite(value) else f"{'–':>6}"
+
+
+def _fmt_bracket(edge, name):
+    if f"{name}_low" not in edge:
+        return f"{'–':>11}"
+    low, high = float(edge[f"{name}_low"]), float(edge[f"{name}_high"])
+    return f"{low:.3f}-{high:.3f}" if np.isfinite(low) else f"{'–':>11}"
 
 
 def _codes(data, symbols):
@@ -406,6 +430,102 @@ def _channel_measures(transducer, input_process, history):
     }
 
 
+def _recurrent_tensors(transducer):
+    """
+    The channel tensors of `transducer` restricted to its single recurrent component.
+
+    Reconstructed transducers can keep transient states, while the capacity bounds
+    need a strongly connected channel. With one recurrent component the capacity does
+    not depend on the initial state, so the transient states can be dropped.
+    """
+    from dataclasses import replace
+
+    from scipy.sparse.csgraph import connected_components
+    from sofic.generators.capacity import channel_tensors
+
+    tensors = channel_tensors(transducer)
+    n = tensors.n_states
+    live = tensors.P > 0
+    adjacency = np.zeros((n, n), dtype=bool)
+    adjacency[np.nonzero(live)[0], tensors.F[live]] = True
+    n_components, labels = connected_components(adjacency, directed=True, connection="strong")
+    closed = [c for c in range(n_components) if not adjacency[labels == c][:, labels != c].any()]
+    if len(closed) != 1:
+        raise ValueError(
+            f"the transducer has {len(closed)} recurrent components, so its capacity depends on the initial state"
+        )
+    keep = np.flatnonzero(labels == closed[0])
+    if len(keep) == n:
+        return tensors
+    index = np.full(n, -1)
+    index[keep] = np.arange(len(keep))
+    F = tensors.F[keep]
+    return replace(
+        tensors,
+        states=tuple(tensors.states[i] for i in keep),
+        P=tensors.P[keep],
+        F=np.where(F >= 0, index[F], -1),
+        allowed=tensors.allowed[keep],
+        initial=np.full(len(keep), 1.0 / len(keep)),
+    )
+
+
+def transducer_capacity(transducer, inputs=None, feedback=False, **options):
+    """
+    Bracket the capacity of an ε-transducer as a finite-state channel.
+
+    An ε-transducer is a unifilar finite-state channel, so its capacity is defined
+    without reference to a driving input. Without feedback the encoder sees only its
+    own messages; the bracket is an optimized Markov-input rate
+    :cite:`Vontobel2008` below and a Q-graph duality bound :cite:`Huleihel2021`
+    above. With feedback the encoder also sees past outputs, hence the channel state;
+    the bracket comes from Q-graph bounds :cite:`Sabag2017,Permuter2008`. Neither
+    capacity is computable exactly in general :cite:`Grigorescu2024`. Feedback can
+    only increase the capacity, and does not for a memoryless channel
+    :cite:`Cover2006`.
+
+    Every state is first made to read every input (:func:`filled_transducer`) and
+    transient states are dropped; a transducer with several recurrent components
+    raises ``ValueError``.
+
+    Parameters
+    ----------
+    transducer : EpsilonTransducer
+    inputs : iterable, None
+        The input alphabet (default: the transducer's).
+    feedback : bool
+        Bracket the feedback capacity instead of the capacity without feedback.
+    **options
+        Passed to :func:`sofic.generators.capacity.feedback_capacity` or
+        :func:`sofic.generators.capacity.capacity`.
+
+    Returns
+    -------
+    sofic.generators.capacity.CapacityBounds
+        ``lower <= C <= upper`` in bits per channel use.
+    """
+    from sofic.generators.capacity import capacity, feedback_capacity
+
+    tensors = _recurrent_tensors(filled_transducer(transducer, inputs))
+    return (feedback_capacity if feedback else capacity)(tensors, **options)
+
+
+def _capacity_measures(transducer, inputs, s):
+    out, errors = {}, []
+    for name, feedback, options in (
+        ("capacity", False, s.capacity_options),
+        ("feedback_capacity", True, s.feedback_capacity_options),
+    ):
+        try:
+            bounds = transducer_capacity(transducer, inputs, feedback, **options)
+            out[f"{name}_low"], out[f"{name}_high"] = float(bounds.lower), float(bounds.upper)
+        except Exception as err:  # noqa: BLE001 - recorded per edge, the layer continues
+            errors.append(f"{name}: {type(err).__name__}: {err}")
+    if errors:
+        out["capacity_error"] = "; ".join(errors)
+    return out
+
+
 def _topology(machine):
     from sofic.inference import topology_key
 
@@ -465,8 +585,8 @@ def _as_data(data, names):
     trials = as_trials(data)
     if not all(np.issubdtype(t.dtype, np.integer) for t in trials):
         raise ValueError(
-            "infer_machines needs the DiscreteData the network was inferred on (or integer symbols); "
-            "for float data use infer_multiplex(..., machines=True)."
+            "the machine and channel layers need the DiscreteData the network was inferred on (or integer "
+            "symbols); for float data use infer_multiplex(..., machines=True) or channels=True."
         )
     return DiscreteData.from_discrete(trials, names)
 
@@ -567,6 +687,9 @@ def infer_machines(data, network, settings=None, embeddings=None, map_fn=map):
                 what == "target",
                 s,
             )
+            if what == "edge" and s.capacity:
+                inputs_seen = result["input_machine"].observation_alphabet
+                result.update(_capacity_measures(result["machine"], inputs_seen, s))
             return job, result, None
         except Exception as err:  # noqa: BLE001 - recorded per machine, the layer continues
             return job, None, f"{type(err).__name__}: {err}"
@@ -590,6 +713,11 @@ def infer_machines(data, network, settings=None, embeddings=None, map_fn=map):
         "n_symbols": "edge_n_symbols",
         "stability": "edge_stability",
         **{k: k for k in ("channel_C", "driven_h", "te_model")},
+        **(
+            {f"{c}_{b}": f"{c}_{b}" for c in ("capacity", "feedback_capacity") for b in ("low", "high")}
+            if s.capacity
+            else {}
+        ),
     }
     edge_vars = {name: np.full((P, P), np.nan) for name in [*edge_keys.values(), "te_gap"]}
     admitted = np.full((P, P), "", dtype=object)
@@ -616,6 +744,8 @@ def infer_machines(data, network, settings=None, embeddings=None, map_fn=map):
                 if k in result:
                     edge_vars[name][src, tgt] = result[k]
             edge_vars["te_gap"][src, tgt] = result["te_model"] - te[src, tgt]
+            if "capacity_error" in result:
+                layer.skipped[("capacity", (names[src], names[tgt]))] = result["capacity_error"]
             by = network.skeleton[tgt].admitted_by if tgt in network.skeleton else {}
             admitted[src, tgt] = ",".join(sorted({str(name) for v, name in by.items() if v[0] == src}))
         else:
