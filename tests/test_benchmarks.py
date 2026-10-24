@@ -4,6 +4,8 @@ Tests for the conditioning-scaling benchmark.
 
 import numpy as np
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from infoflow.benchmarks import conditioning_scaling, scaling_data
 
@@ -82,6 +84,61 @@ def test_score_network_counts():
     assert sk["precision"] == 0.5 and sk["recall"] == 0.5 and sk["specificity"] == pytest.approx(3 / 4)
     assert sk["lag_error"] == pytest.approx(1 / 0.5)  # |3 - 2| over the chance error (L^2 - 1) / 3L for L = 2
     assert scores["intrinsic"]["n_found"] == 1 and scores["intrinsic"]["recall"] == 0.5
+
+
+def test_rank_metrics_examples():
+    from infoflow.benchmarks import rank_metrics
+
+    assert rank_metrics([3, 2, 1, 0], [True, True, False, False]) == (1.0, 1.0)
+    assert rank_metrics([0, 1, 2, 3], [True, True, False, False])[0] == 0.0
+    auroc, auprc = rank_metrics([1, 1, 1, 1], [True, False, True, False])
+    assert auroc == 0.5 and auprc == pytest.approx((1 / 3 + 2 / 4) / 2)
+    assert rank_metrics([np.nan, 2.0, 1.0], [True, False, False]) == (0.0, pytest.approx(1 / 3))
+    assert all(np.isnan(rank_metrics([1, 2], [True, True])))
+
+
+@given(st.lists(st.tuples(st.floats(-5, 5), st.booleans()), min_size=2, max_size=40))
+def test_rank_metrics_matches_pairwise_definition(items):
+    from infoflow.benchmarks import rank_metrics
+
+    score = np.array([s for s, _ in items])
+    truth = np.array([t for _, t in items])
+    auroc, auprc = rank_metrics(score, truth)
+    if truth.all() or not truth.any():
+        assert np.isnan(auroc)
+        return
+    pos, neg = score[truth], score[~truth]
+    pairwise = np.mean([(p > q) + 0.5 * (p == q) for p in pos for q in neg])
+    assert auroc == pytest.approx(pairwise)
+    assert 0 <= auprc <= 1
+
+
+def test_score_edges_ranks_with_scores():
+    import networkx as nx
+
+    from infoflow.benchmarks import score_edges
+
+    graph = nx.DiGraph()
+    graph.add_nodes_from(range(3))
+    graph.add_edge(0, 1, lag=1)
+    score = np.full((3, 3), 0.0)
+    score[0, 1] = 1.0
+    out = score_edges({(0, 1)}, None, score, graph)
+    assert out["auroc"] == 1.0 and out["auprc"] == 1.0 and np.isnan(out["lag_error"])
+
+
+def test_edge_scores_rank_true_parent_first():
+    from infoflow import datasets
+    from infoflow.network import infer_multiplex
+    from infoflow.selection import SkeletonSettings
+
+    data = datasets.chain(2000, seed=0)
+    net = infer_multiplex(
+        data, skeleton_settings=SkeletonSettings(edge_scores=True), interpret=False, node_layer=False, prng=0
+    )
+    score = net.dataset["score"].values
+    assert np.isfinite(score[0, 1]) and score[0, 1] > score[2, 1]
+    assert np.isfinite(score[1, 2]) and score[1, 2] > score[0, 2]
 
 
 @pytest.mark.slow

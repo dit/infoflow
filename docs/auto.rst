@@ -27,12 +27,17 @@ Pipeline
 
 1. **Diagnose.** Integer arrays are symbols; float arrays are preprocessed
    (:func:`~infoflow.preprocess.preprocess`: screening, discretizer and lag budget
-   per node). The report lists the sample size, processes, trials, and flagged
-   nodes.
+   per node, then the guarded network resolution, :doc:`preprocessing`, which
+   replaces symbols too fine for multivariate conditioning by one coarser resolution
+   when every node keeps most of its own predictability). The report lists the
+   sample size, processes, trials, flagged nodes, and the network-resolution
+   decision.
 2. **Choose the estimators.** Selection always uses the plug-in CMI on the
    preprocessing symbols. For continuous data it adds the linear-Gaussian estimator,
    in one greedy search at a Bonferroni-split level, for every target whose present
-   is linear in its past (:func:`~infoflow.auto.linearity_pvalues`, below). Every
+   is linear in its past (:func:`~infoflow.auto.linearity_pvalues`, below), and for a
+   target that tests nonlinear only if the Gaussian estimator's parents predict it at
+   least as well as the plug-in's (below). Every
    selection stage is tested at 0.001, with enough permutations for the split level
    and curtailment (which never changes a decision).
 3. **Pilot.** The selection is run on three sampled targets, with the seeds the full
@@ -63,11 +68,15 @@ Interpretation         off                        on                         on
 Shared-only layers     off                        off                        on
 Hyperedges             off                        off                        on
 Source pre-screen      above 30 processes         above 30 processes         above 30 processes
+Network resolution     auto                       auto                       auto
 =====================  =========================  =========================  ==============================
+
+``network_resolution=False`` restores the per-node symbols; ``True`` forces the
+uniform resolution.
 
 The batched GPU kernels are used when PyTorch is installed.
 
-Why the Gaussian estimator is gated
+When the Gaussian estimator is used
 -----------------------------------
 
 The linear-Gaussian estimator is by far the most powerful on linear couplings
@@ -88,6 +97,29 @@ lenient level 0.05, since a false alarm only costs the Gaussian estimator's powe
 for that target. On 100-node linear networks it flagged 2-4% of targets; it flagged
 every target of the coupled logistic maps and exactly the two nonlinear targets of
 MuTE.
+
+A nonlinear target does not always lose the Gaussian estimator. Smooth, strongly
+autocorrelated real series, such as river discharge (:doc:`benchmarks`), test
+nonlinear, yet coarse symbols cannot represent their memory and the plug-in
+estimator is weak there, while the Gaussian estimator conditions on the exact past.
+For each target that tests nonlinear, :func:`infer` therefore selects parents twice,
+with the plug-in alone and with the Gaussian estimator alone, and compares the two
+parent sets with a nonparametric referee: the blocked cross-validated error of
+nearest-neighbour regression of the target on each set
+(:func:`~infoflow.auto.parent_prediction_error`), which favours neither estimator's
+assumptions. The Gaussian estimator is kept for the target only if its parents
+predict no worse, and then its tests use the local permutation null
+(``gaussian_null="local"``), which keeps a candidate's dependence on the
+conditioning set under the null; otherwise the target uses the plug-in alone. The
+error ratio was 2.4-3.8 on every Lorenz-96 target and 1.0-2.1 on MuTE's nonlinear
+targets, so both kept the plug-in alone (keeping both estimators there drops
+Lorenz-96 recall from 24 of 24 links to 10), and below 1 for about half the
+logistic-map and river targets. Against the earlier rule, which dropped the Gaussian
+estimator for every nonlinear target, AUROC rose from 0.93 to 0.97 on the logistic
+maps and from 0.62 to 0.70 on three-station CausalRivers graphs, with Lorenz-96,
+MuTE, and the VAR networks unchanged or better. The choice costs one extra selection
+per nonlinear target and estimator, and the report lists the targets for which the
+Gaussian estimator was dropped or kept.
 
 The stratified-trend and coarse-symbol estimators are not in the presets: they
 condition on coarse cells, and the information left inside a cell creates false

@@ -109,3 +109,27 @@ def test_equal_width_candidates_are_opt_in():
     widths = preprocess(x, max_lag=3, equal_width=True, prng=0).report.nodes[0]
     assert not any(c["kind"] == "equal_width" for c in default.candidates)
     assert any(c["kind"] == "equal_width" for c in widths.candidates)
+
+
+def test_network_scores_prefer_coarse_contexts_on_lorenz96():
+    from infoflow.preprocess.scoring import network_scores
+
+    x = datasets.lorenz96(1000, n_vars=8, seed=0)
+    scores = network_scores([x], bins=(2, 3, 4, 8), histories=(1, 2))
+    best = max(scores, key=lambda k: scores[k])
+    assert best[0] in (3, 4) and scores[best] > scores[8, 2]
+
+
+def test_network_resolution_adopted_only_when_every_node_keeps_its_score():
+    lorenz = preprocess(datasets.lorenz96(1000, n_vars=8, seed=0), max_lag=2, network_resolution="auto", prng=0)
+    net = lorenz.report.network
+    assert net["adopted"] and min(net["retained"]) >= 0.7
+    assert {str(d) for d in lorenz.data.discretizers} == {f"EqualFrequency(bins={net['bins']})"}
+    assert all(e.max_lag == net["history"] for e in lorenz.embeddings)
+    assert "network resolution" in lorenz.report.summary()
+
+    mute = preprocess(datasets.mute_network(3000, seed=0), max_lag=5, network_resolution="auto", prng=0)
+    assert not mute.report.network["adopted"]  # the oscillating driver needs its fine symbols
+    forced = preprocess(datasets.mute_network(3000, seed=0), max_lag=5, network_resolution=True, prng=0)
+    assert forced.report.network["adopted"]
+    assert preprocess(datasets.mute_network(500, seed=0), max_lag=3, prng=0).report.network == {}

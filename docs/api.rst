@@ -37,6 +37,7 @@ Parent selection
 
 .. automodule:: infoflow.embedding
 .. automodule:: infoflow.selection
+.. automodule:: infoflow.stability
 
 Nodes and interpretation
 ------------------------
@@ -45,6 +46,7 @@ Nodes and interpretation
 .. automodule:: infoflow.interpret
 .. automodule:: infoflow.contemporaneous
 .. automodule:: infoflow.hyperedges
+.. automodule:: infoflow.oinfo
 
 Machines
 --------
@@ -56,12 +58,14 @@ Transfer entropy and tests
 --------------------------
 
 .. automodule:: infoflow.te
+.. automodule:: infoflow.predictive
 .. automodule:: infoflow.stats
 
 Comparison and workflow
 -----------------------
 
 .. automodule:: infoflow.compare
+.. automodule:: infoflow.regimes
 .. automodule:: infoflow.parallel
 .. automodule:: infoflow.backend
 .. automodule:: infoflow.checkpoint
@@ -74,3 +78,4 @@ Example processes and benchmarks
 
 .. automodule:: infoflow.datasets
 .. automodule:: infoflow.benchmarks
+.. automodule:: infoflow.baselines

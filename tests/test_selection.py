@@ -285,3 +285,24 @@ def test_trend_and_coarse_estimators():
         sk = select_parents(result.data, target, result.embeddings, None, settings, 0)
         assert set(sk.parents()) <= set(graph.predecessors(target))
         assert sk.parents()
+
+
+@pytest.mark.slow
+def test_gaussian_local_null_in_the_ensemble_avoids_false_links():
+    from infoflow import datasets
+    from infoflow.network import _as_discrete
+    from infoflow.selection import SkeletonSettings, infer_skeleton
+
+    data, embeddings, _ = _as_discrete(datasets.mute_network(3000, seed=0), None, "auto", 5, 0)
+    stages = ("max_stat", "min_stat", "omnibus", "max_seq", "pairs")
+    strict: dict[str, Any] = {**{f"alpha_{s}": 0.001 for s in stages}, **{f"n_perm_{s}": 2000 for s in stages}}
+
+    def false_links(null):
+        settings = SkeletonSettings(estimator=("plugin", "gaussian"), gaussian_null=null, curtail=True, **strict)
+        sk = infer_skeleton(data, embeddings, None, settings, prng=0)
+        return {(p, t) for t, s in sk.items() if s.significant for p in s.parents()} - set(datasets.MUTE_EDGES)
+
+    # Linear conditioning on the nonlinear driver leaves its children dependent; the free
+    # null reads that as a link, the local null keeps it under the null.
+    assert false_links("free")
+    assert not false_links("local")

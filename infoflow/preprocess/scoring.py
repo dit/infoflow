@@ -22,7 +22,7 @@ forecast error behind information-storage embedding selection
 
 import numpy as np
 
-__all__ = ("context_codes", "reference_codes", "score_contexts")
+__all__ = ("context_codes", "network_scores", "reference_codes", "score_contexts")
 
 
 def reference_codes(series, bins):
@@ -138,3 +138,69 @@ def score_contexts(contexts, raw_series, resolutions=(2, 4, 8), folds=5, gap=1, 
     fold_scores = np.mean([v[:k] for v in per.values()], axis=0)
     se = float(np.std(fold_scores, ddof=1) / np.sqrt(k)) if k > 1 else np.inf
     return float(np.mean(fold_scores)), se, {B: (float(np.mean(v)), v) for B, v in per.items()}, fold_scores
+
+
+def _equal_frequency(trials, p, B):
+    pooled = np.concatenate([t[:, p] for t in trials])
+    edges = np.quantile(pooled, np.linspace(0, 1, B + 1)[1:-1])
+    return [np.searchsorted(edges, t[:, p], side="right") for t in trials]
+
+
+def _lagged_sources(trials, n_sources):
+    """
+    Per target, the `n_sources` processes whose lag-1 ranks correlate most with its present.
+    """
+    from scipy.stats import rankdata
+
+    P = trials[0].shape[1]
+    past = np.concatenate([np.apply_along_axis(rankdata, 0, t[:-1]) for t in trials if len(t) > 1])
+    present = np.concatenate([np.apply_along_axis(rankdata, 0, t[1:]) for t in trials if len(t) > 1])
+    corr = np.abs(np.corrcoef(past.T, present.T)[:P, P:])
+    np.fill_diagonal(corr, -np.inf)
+    corr = np.nan_to_num(corr, nan=-np.inf)
+    return [list(np.argsort(-corr[:, t])[: min(n_sources, P - 1)]) for t in range(P)]
+
+
+def network_scores(trials, bins=(2, 3, 4, 6, 8), histories=(1, 2), n_sources=2, resolutions=(2, 4, 8), folds=5):
+    """
+    Cross-validated scores of uniform network resolutions.
+
+    Parent selection conditions each target's own past *and* its selected sources on
+    the same samples, so a resolution that predicts a node well from its own past alone
+    can leave the joint contexts of the multivariate tests too sparse. For every
+    resolution :math:`(B, L)` here, each target's future is predicted (the score of
+    :func:`score_contexts`) from its own past :math:`L` steps and the lag-1 values of its
+    `n_sources` most correlated processes, every variable in :math:`B`
+    equal-frequency bins; the network score is the mean over targets.
+
+    Parameters
+    ----------
+    trials : list of np.ndarray
+        Raw trials, (samples, processes).
+
+    Returns
+    -------
+    dict
+        ``(B, L) -> mean score``.
+    """
+    P = trials[0].shape[1]
+    sources = _lagged_sources(trials, n_sources)
+    out = {}
+    for B in bins:
+        symbols = [_equal_frequency(trials, p, B) for p in range(P)]
+        for L in histories:
+            values = []
+            for t in range(P):
+                contexts = []
+                for i in range(len(trials)):
+                    N = len(trials[i])
+                    times = np.arange(L, N)
+                    code = np.zeros(len(times), dtype=np.int64)
+                    for lag in range(1, L + 1):
+                        code = code * B + symbols[t][i][times - lag]
+                    for s in sources[t]:
+                        code = code * B + symbols[s][i][times - 1]
+                    contexts.append((code, times))
+                values.append(score_contexts(contexts, [tr[:, t] for tr in trials], resolutions, folds, gap=L)[0])
+            out[B, L] = float(np.mean(values))
+    return out

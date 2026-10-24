@@ -212,7 +212,9 @@ def test_infer_reuses_pilot_skeletons_exactly():
     x = simulate_network(graph, 1500, "var", prng=4)
     result = auto.infer(x, preset="fast", prng=3)
     pre, run = (int(s) for s in as_generator(3).integers(0, 2**32, size=2))
-    discrete, embeddings, _, _ = auto._diagnose(as_trials(x), None, pre)
+    discrete, embeddings, _, _ = auto._diagnose(
+        as_trials(x), None, pre, network_resolution=auto.PRESETS["fast"]["network_resolution"]
+    )
     settings = auto._skeleton_settings(
         result.report.estimators, False, result.report.options["threads"], result.report.options["device"], {}
     )
@@ -253,3 +255,40 @@ def test_infer_gates_gaussian_per_target():
     assert report.diagnostics["nonlinear_targets"] == [1, 3]
     assert result.network.settings["skeleton_settings"].target_estimators == {1: ("plugin",), 3: ("plugin",)}
     assert all(name != "gaussian" for (s, t), name in report.admitted.items() if t in (1, 3))
+    # The Gaussian estimator's parents predict the nonlinear children worse than the plug-in's.
+    assert report.diagnostics["gaussian_kept"] == []
+    assert all(r >= 1.0 for r in report.diagnostics["gaussian_ratio"].values())
+
+
+@pytest.mark.slow
+def test_presets_use_network_resolution_on_lorenz96():
+    from infoflow.benchmarks import lorenz96_graph
+
+    x = datasets.lorenz96(1000, n_vars=8, seed=0)
+    result = auto.infer(x, preset="fast", max_lag=2, prng=0)
+    net = result.report.diagnostics["network_resolution"]
+    assert net["adopted"] and "network resolution" in str(result.report)
+    truth = set(lorenz96_graph(8).edges())
+    found = {(p, t) for t, sk in result.network.skeleton.items() if sk.significant for p in sk.parents()}
+    assert len(found & truth) >= 0.8 * len(truth) and len(found - truth) <= 2
+    off = auto.infer(x, preset="fast", max_lag=2, network_resolution=False, prng=0)
+    assert "network_resolution" not in off.report.diagnostics
+
+
+def test_infer_pins_edge_scores():
+    data = datasets.chain(2000, seed=0).astype(np.int64)
+    net = auto.infer(data, preset="fast", edge_scores=True, prng=0).network
+    score = net.dataset["score"].values
+    assert score[0, 1] > score[2, 1] and score[1, 2] > score[0, 2]
+
+
+def test_parent_prediction_error_prefers_true_parents():
+    from infoflow.data import DiscreteData
+
+    x = datasets.var_process(3000, [[[0.5, 0.0, 0.0], [0.6, 0.3, 0.0], [0.0, 0.0, 0.4]]], noise_std=0.3, seed=0)
+    data = DiscreteData.from_discrete(np.zeros((3000, 3), dtype=np.int64))
+    data.raw = [x]
+    own = auto.parent_prediction_error(data, 1, [(1, 1)])
+    with_parent = auto.parent_prediction_error(data, 1, [(1, 1), (0, 1)])
+    with_noise = auto.parent_prediction_error(data, 1, [(1, 1), (2, 1)])
+    assert with_parent < 0.8 * own and with_noise > 0.95 * own
