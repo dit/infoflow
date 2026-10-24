@@ -16,6 +16,7 @@ from .layers import BAYES_THRESHOLD, LAYERS, adjust_layer_pvalues, layer_statist
 from .selection import SkeletonSettings, _cmi, _Columns, infer_skeleton
 
 if TYPE_CHECKING:
+    from .channels import ChannelLayer
     from .machines import MachineLayer
 
 __all__ = (
@@ -57,6 +58,9 @@ class MultiplexNetwork:
     machines : MachineLayer, None
         ε-machines, ε-transducers, and the composed model
         (:func:`~infoflow.machines.infer_machines`), when requested.
+    channels : ChannelLayer, None
+        A discrete memoryless channel per edge with its mutual information and
+        capacity (:func:`~infoflow.channels.infer_channels`), when requested.
     """
 
     dataset: xr.Dataset
@@ -66,6 +70,7 @@ class MultiplexNetwork:
     report: object = None
     hyperedges: xr.Dataset | None = None
     machines: "MachineLayer | None" = None
+    channels: "ChannelLayer | None" = None
 
     @property
     def names(self):
@@ -149,6 +154,8 @@ class MultiplexNetwork:
             lines.append(f"{src:>6} -> {tgt:<6}  {kind:<16}  {delay:5d}  " + "  ".join(cells))
         if self.machines is not None:
             lines += ["", self.machines.summary()]
+        if self.channels is not None:
+            lines += ["", self.channels.summary()]
         return "\n".join(lines)
 
 
@@ -279,6 +286,8 @@ def infer_multiplex(
     bayes_threshold=BAYES_THRESHOLD,
     machines=False,
     machine_settings=None,
+    channels=False,
+    channel_settings=None,
     directed_information=False,
     prng=None,
 ):
@@ -371,6 +380,11 @@ def infer_multiplex(
         per node, an ε-transducer per edge and per target, and their composed model,
         as ``network.machines``. Needs sofic (``pip install 'infoflow[machines]'``).
     machine_settings : MachineSettings or dict, None
+    channels : bool
+        Add the channel layer (:func:`~infoflow.channels.infer_channels`): a discrete
+        memoryless channel per edge with its mutual information and capacity, as
+        ``network.channels``.
+    channel_settings : ChannelSettings or dict, None
     directed_information : bool
         Add each pair's instantaneous information exchange ``iie`` (with
         ``iie_pvalue``), :func:`~infoflow.contemporaneous.instantaneous_exchange`, and
@@ -549,6 +563,7 @@ def infer_multiplex(
         "skeleton_settings": settings,
         "discretizers": [getattr(d, "params", lambda d=d: {"name": str(d)})() for d in discrete.discretizers],
         "machines": machines,
+        "channels": channels,
     }
     network = MultiplexNetwork(
         dataset=dataset,
@@ -563,6 +578,11 @@ def infer_multiplex(
 
         network.machines = infer_machines(estimation_data, network, machine_settings, map_fn=map_fn)
         provenance["machine_settings"] = network.machines.settings
+    if channels:
+        from .channels import infer_channels
+
+        network.channels = infer_channels(estimation_data, network, channel_settings)
+        provenance["channel_settings"] = network.channels.settings
     return network
 
 

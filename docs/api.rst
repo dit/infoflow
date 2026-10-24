@@ -55,6 +55,11 @@ Machines
 .. automodule:: infoflow.machines
 .. automodule:: infoflow.network_model
 
+Channels
+--------
+
+.. automodule:: infoflow.channels
+
 Transfer entropy and tests
 --------------------------
 
