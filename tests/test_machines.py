@@ -91,6 +91,77 @@ def test_delay_channel_is_a_memoryless_transducer_on_the_shifted_input():
     assert float(m.dataset["model_te"].sel(source="x0", target="x1")) == pytest.approx(1 - _h2(0.1), abs=0.02)
 
 
+def _trapdoor(n, seed):
+    """
+    The trapdoor channel driven by fair coins, with delay 1: x0 is the input, x1 the output.
+    """
+    rng = np.random.default_rng(seed)
+    x = rng.integers(0, 2, n)
+    y = np.zeros(n, dtype=np.int64)
+    ball = 0
+    for t in range(1, n):
+        y[t] = x[t - 1] if x[t - 1] == ball else rng.integers(0, 2)
+        ball ^= x[t - 1] ^ y[t]
+    return np.stack([x, y], axis=1)
+
+
+def test_memoryless_edge_capacity_is_unchanged_by_feedback():
+    """
+    A one-state transducer is the edge's discrete memoryless channel, so both capacities equal the channel layer's.
+    """
+    data = DiscreteData.from_discrete(_delayed_copy(8000, 1, 0.1, 9))
+    net = infer_multiplex(data, max_lag=2, channels=True, **QUICK)
+    edge = infer_machines(data, net, MachineSettings(stability=False)).dataset.sel(source="x0", target="x1")
+    dmc = float(net.channels.dataset["capacity"].sel(source="x0", target="x1"))
+    assert dmc == pytest.approx(1 - _h2(0.1), abs=0.03)
+    for name in ("capacity", "feedback_capacity"):
+        assert float(edge[f"{name}_low"]) == pytest.approx(dmc, abs=1e-3)
+        assert float(edge[f"{name}_high"]) == pytest.approx(dmc, abs=1e-3)
+
+
+def test_trapdoor_edge_gains_capacity_from_feedback():
+    """
+    The trapdoor channel's feedback capacity is log2 of the golden ratio (Permuter et al. 2008); without
+    feedback its capacity is below 0.6 (Huleihel et al. 2021).
+    """
+    data = DiscreteData.from_discrete(_trapdoor(20000, 0))
+    net = infer_multiplex(data, max_lag=1, **QUICK)
+    layer = infer_machines(data, net, MachineSettings(stability=False, exact_flows=False))
+    assert len(list(layer.edges[("x0", "x1")].states())) == 2
+    edge = layer.dataset.sel(source="x0", target="x1")
+    golden = np.log2((1 + np.sqrt(5)) / 2)
+    assert float(edge["feedback_capacity_low"]) == pytest.approx(golden, abs=0.01)
+    assert float(edge["feedback_capacity_high"]) == pytest.approx(golden, abs=0.02)
+    assert 0.55 < float(edge["capacity_low"]) <= float(edge["capacity_high"]) < float(edge["feedback_capacity_low"])
+    assert "fb_capacity" in layer.summary()
+
+
+def test_transducer_capacity_drops_transient_states():
+    from sofic.examples.processes import trapdoor_et
+
+    from infoflow.machines import transducer_capacity
+
+    channel = trapdoor_et()
+    padded = channel.copy()
+    recurrent = sorted(channel.states(), key=repr)
+    for x in channel.alphabets()[0]:
+        for y in channel.alphabets()[1]:
+            padded.add_transition("transient", recurrent[0], x, y, prob=0.5)
+    assert len(list(padded.states())) == 3
+    options = dict(max_order=1)
+    assert transducer_capacity(padded, feedback=True, **options).upper == pytest.approx(
+        transducer_capacity(channel, feedback=True, **options).upper, abs=1e-6
+    )
+
+
+def test_capacity_can_be_switched_off():
+    data = DiscreteData.from_discrete(_delayed_copy(4000, 1, 0.1, 10))
+    net = infer_multiplex(data, max_lag=2, **QUICK)
+    layer = infer_machines(data, net, MachineSettings(stability=False, capacity=False))
+    assert "capacity_low" not in layer.dataset
+    assert "–" in layer.summary()
+
+
 def test_xor_shows_only_in_the_target_transducer():
     net = infer_multiplex(datasets.xor_synergy(8000, noise=0.05, seed=1), max_lag=2, machines=True, **QUICK)
     m = net.machines

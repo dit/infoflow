@@ -13,6 +13,7 @@ from importlib.metadata import version as _version
 
 from . import bayes, benchmarks, datasets, draw, preprocess
 from .auto import AutoReport, AutoResult, infer
+from .channels import ChannelLayer, ChannelSettings, infer_channels
 from .checkpoint import Checkpoint
 from .compare import NetworkComparison, compare_networks
 from .data import DiscreteData, realizations

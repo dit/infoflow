@@ -97,6 +97,42 @@ always work on symbols, so a parent admitted only by the ``gaussian`` or ``trend
 estimator may carry little dependence at the symbol level: a near-trivial transducer
 and a large ``te_gap`` are then expected, not a failure of the model.
 
+Capacity
+--------
+
+An ε-transducer is a unifilar finite-state channel, so its capacity needs no driving
+input. With ``capacity=True`` (the default) every edge transducer gets two brackets in
+bits per channel use (:func:`~infoflow.machines.transducer_capacity`, built on
+:mod:`sofic.generators.capacity`):
+
+* ``capacity_low`` / ``capacity_high``: the capacity without feedback, where the
+  encoder sees only its messages. The lower end is the rate of an optimized Markov
+  input :cite:`Vontobel2008`, the upper end a Q-graph duality bound
+  :cite:`Huleihel2021`.
+* ``feedback_capacity_low`` / ``feedback_capacity_high``: the capacity with
+  feedback, where the encoder also sees the past outputs and therefore the channel
+  state. Both ends come from Q-graph bounds :cite:`Sabag2017,Permuter2008`.
+
+Neither capacity is computable exactly in general :cite:`Grigorescu2024`, so both are
+brackets. Feedback never lowers the capacity, and leaves a memoryless channel's
+capacity unchanged :cite:`Cover2006`: a one-state transducer has the capacity of the
+edge's discrete memoryless channel (:doc:`channels`), with and without feedback. A
+transducer with memory can gain from feedback. The trapdoor channel's feedback
+capacity is :math:`\log_2 \varphi \approx 0.694` :cite:`Permuter2008`, while its
+capacity without feedback is below 0.6 :cite:`Huleihel2021`, and the reconstructed
+transducer of a trapdoor edge reproduces both.
+
+Before bounding, every state is made to read every input (as for the channel
+measures above) and transient states are dropped. A transducer with several
+recurrent components has a capacity that depends on its initial state, so it is
+recorded in ``machines.skipped`` instead. The no-feedback bracket solves a dynamic
+program on a belief grid and takes seconds to tens of seconds per edge with memory.
+``capacity=False`` skips both brackets, and ``capacity_options`` /
+``feedback_capacity_options`` pass keyword arguments to sofic's
+:func:`~sofic.generators.capacity.capacity` and
+:func:`~sofic.generators.capacity.feedback_capacity` (for example
+``belief_resolution`` or ``max_order``).
+
 The composed model
 ------------------
 
