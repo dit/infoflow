@@ -1,7 +1,8 @@
 """
 Benchmark data with known coupling structure.
 
-All generators return an array of shape (samples, processes) and take a ``seed``.
+All generators take a ``seed`` and return an array of shape (samples, processes),
+except :func:`spiking_glm`, which returns spike times and the true couplings.
 """
 
 import numpy as np
@@ -15,6 +16,7 @@ __all__ = (
     "mute_network",
     "noisy_eca",
     "orthogonal_features",
+    "spiking_glm",
     "switching_coupling",
     "tent_ring_coupling",
     "var_process",
@@ -282,3 +284,80 @@ def orthogonal_features(n=4000, memory=0.5, noise=0.5, seed=None):
         x1[t] = memory * x1[t - 1] + sign[t - 1] + noise * rng.normal()
         x2[t] = memory * x2[t - 1] + large[t - 1] + noise * rng.normal()
     return np.stack([x0, x1, x2], axis=1)
+
+
+def spiking_glm(
+    n=20000,
+    weights=None,
+    delays=None,
+    baseline=0.02,
+    refractory=2,
+    adaptation=0.0,
+    tau_adapt=50,
+    dt=0.005,
+    seed=None,
+    burn_in=500,
+):
+    """
+    A Bernoulli-GLM network of spiking neurons with known delayed couplings.
+
+    In bin ``t`` neuron ``i`` spikes with probability
+    :math:`\\sigma(\\mathrm{logit}(b) + \\sum_j W_{ij} s_j(t - D_{ij}) - a\\,A_i(t))`,
+    and never within `refractory` bins of its own last spike; :math:`A_i` is an
+    exponentially decaying trace (time constant `tau_adapt` bins) of its own spikes,
+    so ``adaptation`` gives each neuron a long history dependence.
+
+    Parameters
+    ----------
+    n : int
+        Number of bins.
+    weights : array_like, None
+        ``weights[i, j]`` is the effect (in logits) of neuron ``j`` on ``i``. Default:
+        the chain 0 -> 1 -> 2 with weight 4.
+    delays : array_like, None
+        ``delays[i, j]`` in bins (default 3 for 0 -> 1 and 5 for 1 -> 2).
+    baseline : float
+        Spike probability per bin without input.
+    refractory, adaptation, tau_adapt : float
+    dt : float
+        Bin width of the returned spike times.
+
+    Returns
+    -------
+    spikes : SpikeTrains
+        Spike times at bin centres, so that binning at `dt` recovers the bins.
+    edges : list of (source, target, delay)
+        The true couplings.
+    """
+    from .spikes import SpikeTrains
+
+    rng = _rng(seed)
+    if weights is None:
+        weights = np.zeros((3, 3))
+        weights[1, 0] = weights[2, 1] = 4.0
+        delays = np.zeros((3, 3), dtype=int) if delays is None else delays
+        delays[1, 0], delays[2, 1] = 3, 5
+    W = np.asarray(weights, dtype=float)
+    P = W.shape[0]
+    D = np.ones((P, P), dtype=int) if delays is None else np.asarray(delays, dtype=int)
+    total = n + burn_in
+    s = np.zeros((total, P), dtype=np.int64)
+    last = np.full(P, -(10**9))
+    trace = np.zeros(P)
+    decay = np.exp(-1.0 / tau_adapt)
+    rows, cols = np.nonzero(W)
+    base = np.log(baseline / (1 - baseline))
+    for t in range(total):
+        drive = np.full(P, base) - adaptation * trace
+        for i, j in zip(rows, cols, strict=True):
+            if t - D[i, j] >= 0:
+                drive[i] += W[i, j] * s[t - D[i, j], j]
+        p = 1.0 / (1.0 + np.exp(-drive))
+        p[t - last <= refractory] = 0.0
+        s[t] = rng.random(P) < p
+        last[s[t] == 1] = t
+        trace = trace * decay + s[t]
+    s = s[burn_in:]
+    times = [(np.flatnonzero(s[:, i]) + 0.5) * dt for i in range(P)]
+    edges = [(int(j), int(i), int(D[i, j])) for i, j in zip(rows, cols, strict=True)]
+    return SpikeTrains(times, dt=dt, t_start=0.0, t_stop=n * dt), edges

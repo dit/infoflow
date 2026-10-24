@@ -230,13 +230,20 @@ def _as_discrete(data, names, preprocess, max_lag, prng):
     if isinstance(data, DiscreteData):
         return data, None, None
     from .data import as_trials
+    from .spikes import SpikeTrains
 
+    spikes = isinstance(data, SpikeTrains)
+    if spikes and names is None:
+        names = data.names
     trials = as_trials(data)
-    if preprocess is None or (preprocess == "auto" and all(np.issubdtype(t.dtype, np.integer) for t in trials)):
+    discrete = all(np.issubdtype(t.dtype, np.integer) for t in trials)
+    if preprocess is None or (preprocess == "auto" and discrete and not spikes):
         return DiscreteData.from_discrete(trials, names), None, None
     from .preprocess.pipeline import preprocess as run_preprocess
 
     kwargs = {} if preprocess == "auto" else dict(preprocess)
+    if spikes:
+        kwargs.setdefault("spikes", True)
     result = run_preprocess(trials, names=names, max_lag=max_lag, prng=prng, **kwargs)
     return result.data, result.embeddings, result.report
 

@@ -97,7 +97,7 @@ def _fold_scores(contexts, targets, B, folds, gap, alpha=0.5):
     return np.array(scores)
 
 
-def score_contexts(contexts, raw_series, resolutions=(2, 4, 8), folds=5, gap=1, min_per_bin=50):
+def score_contexts(contexts, raw_series, resolutions=(2, 4, 8), folds=5, gap=1, min_per_bin=50, targets=None):
     """
     The multi-resolution score of one candidate context encoding.
 
@@ -114,6 +114,12 @@ def score_contexts(contexts, raw_series, resolutions=(2, 4, 8), folds=5, gap=1, 
         Blocked cross-validation folds per trial.
     gap : int
         Realizations dropped between training and test blocks.
+    targets : list of np.ndarray, None
+        Per trial, integer codes predicted instead of the reference targets (one
+        resolution, their alphabet). For spike trains these are the spike
+        indicators, since equal-frequency bins of a mostly-zero series collapse;
+        the score is then the history dependence :math:`R` of :cite:`Rudelt2021`
+        itself.
 
     Returns
     -------
@@ -126,12 +132,15 @@ def score_contexts(contexts, raw_series, resolutions=(2, 4, 8), folds=5, gap=1, 
     fold_scores : np.ndarray
         Per-fold scores averaged over resolutions (for bootstrapping).
     """
-    n = sum(len(c) for c, _ in contexts)
-    usable = [B for B in resolutions if n / folds / B >= min_per_bin] or [min(resolutions)]
     per = {}
-    for B in usable:
-        targets = reference_codes(raw_series, B)
+    if targets is not None:
+        B = max(int(max((t.max() for t in targets if len(t)), default=0)) + 1, 2)
         per[B] = _fold_scores(contexts, targets, B, folds, gap)
+    else:
+        n = sum(len(c) for c, _ in contexts)
+        usable = [B for B in resolutions if n / folds / B >= min_per_bin] or [min(resolutions)]
+        for B in usable:
+            per[B] = _fold_scores(contexts, reference_codes(raw_series, B), B, folds, gap)
     k = min(len(v) for v in per.values())
     if k == 0:
         return 0.0, np.inf, per, np.zeros(0)
