@@ -11,6 +11,7 @@ Data
 ----
 
 .. automodule:: infoflow.data
+.. automodule:: infoflow.spikes
 
 Preprocessing
 -------------

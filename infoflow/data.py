@@ -27,9 +27,14 @@ def as_trials(data):
     """
     Normalize input to a list of 2D float or int arrays shaped (samples, processes).
 
-    Accepts a 2D array (one trial), a 1D array (one process, one trial), or
-    :class:`~dit.inference.Trials` / a list of such arrays.
+    Accepts a 2D array (one trial), a 1D array (one process, one trial),
+    :class:`~dit.inference.Trials` / a list of such arrays, or
+    :class:`~infoflow.spikes.SpikeTrains` (binned to spike counts).
     """
+    from .spikes import SpikeTrains, bin_spikes
+
+    if isinstance(data, SpikeTrains):
+        return bin_spikes(data)
     if isinstance(data, (Trials, list, tuple)) and len(data) and np.ndim(data[0]) >= 1 and not np.isscalar(data[0]):
         arrays = [np.asarray(t) for t in data]
         if all(a.ndim == 1 for a in arrays) and not isinstance(data, Trials):

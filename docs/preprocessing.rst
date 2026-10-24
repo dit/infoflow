@@ -75,3 +75,11 @@ per-node choices this step looks across nodes, but it picks one of about ten
 network-wide resolutions rather than anything edge-specific, and it did not raise
 false positives on empty networks (0.4% of pairs against 1.1% with per-node
 symbols).
+
+Spike trains
+------------
+
+Spike times (:class:`~infoflow.spikes.SpikeTrains`) or binned spike counts with
+``spikes=True`` take a separate path, in which every node's present is its spike
+indicator and its past is the best of three spike-history encodings; see
+:doc:`spikes`.

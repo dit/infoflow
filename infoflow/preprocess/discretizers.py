@@ -20,8 +20,11 @@ __all__ = (
     "Discretizer",
     "EqualFrequency",
     "EqualWidth",
+    "ExponentialBins",
     "Identity",
     "Ordinal",
+    "OrdinalIntervals",
+    "SpikeIntervals",
     "Threshold",
     "discretize",
 )
@@ -218,6 +221,199 @@ class Ordinal(Discretizer):
 
     def params(self):
         return {"name": "Ordinal", "order": self.order, "delay": self.delay, "ties": self.ties}
+
+
+def _spike_indicator(x):
+    return (np.asarray(x) > 0).astype(np.int64)
+
+
+def _pooled_intervals(series):
+    return np.concatenate(
+        [np.diff(np.flatnonzero(_spike_indicator(s))) for s in series] + [np.zeros(0, dtype=np.int64)]
+    )
+
+
+@dataclass(repr=False)
+class ExponentialBins(Discretizer):
+    """
+    Binary spike history in bins of exponentially growing width :cite:`Rudelt2021`.
+
+    The past window of `window` bins ending at time ``t`` is split into `d` sub-bins
+    whose widths grow as :math:`\\tau_1 10^{j \\kappa}` (:math:`j = 0` the most recent,
+    :math:`\\tau_1` chosen so that the widths add up to `window`, edges rounded to
+    whole bins); the past symbol records which sub-bins hold a spike (``2**d``
+    symbols). With ``kappa = 0`` the sub-bins are uniform, the multi-bin messages of
+    :cite:`Ito2011`. The present is the spike indicator of bin ``t``. Stacked lags
+    are spaced by ``lag_step = window``.
+    """
+
+    d: int = 3
+    kappa: float = 0.0
+    window: int = 8
+    rank_based = True
+    present_alphabet = 2
+
+    def edges(self):
+        """
+        Sub-bin boundaries in bins before ``t``: sub-bin ``j`` covers lags ``edges[j]`` to ``edges[j+1] - 1``.
+        """
+        if self.window < self.d:
+            raise ValueError(f"window ({self.window}) must hold at least d ({self.d}) bins")
+        widths = 10.0 ** (self.kappa * np.arange(self.d))
+        edges = np.round(np.concatenate([[0.0], np.cumsum(widths)]) * self.window / widths.sum()).astype(np.int64)
+        for j in range(1, self.d + 1):
+            edges[j] = max(edges[j], edges[j - 1] + 1)
+        edges[-1] = self.window
+        for j in range(self.d - 1, 0, -1):
+            edges[j] = min(edges[j], edges[j + 1] - 1)
+        return edges
+
+    def fit(self, series):
+        self.edges()
+        self.past_alphabet = 2**self.d
+        self.lag_step = self.window
+        return self
+
+    def encode(self, x):
+        s = _spike_indicator(x)
+        N, offset = len(s), self.window - 1
+        past = np.full(N, -1, dtype=np.int64)
+        if offset < N:
+            cum = np.concatenate([[0], np.cumsum(s)])
+            t = np.arange(offset, N)
+            edges = self.edges()
+            code = np.zeros(len(t), dtype=np.int64)
+            for j in range(self.d):
+                spikes = cum[t - edges[j] + 1] - cum[t - edges[j + 1] + 1]
+                code |= (spikes > 0).astype(np.int64) << j
+            past[offset:] = code
+        return Encoding(past, s, offset, 0)
+
+    def params(self):
+        return {"name": "ExponentialBins", "d": self.d, "kappa": self.kappa, "window": self.window}
+
+
+@dataclass(repr=False)
+class SpikeIntervals(Discretizer):
+    """
+    The time since the last spike and the preceding inter-spike intervals, binned.
+
+    The past symbol at time ``t`` encodes the elapsed time since the most recent spike
+    and the `k` - 1 intervals between the `k` most recent spikes, each in `bins`
+    equal-frequency bins (edges at quantiles of the pooled elapsed times and of the
+    pooled inter-spike intervals, respectively), plus one symbol for "fewer than `k`
+    spikes in the last `max_interval` bins" (``bins**k + 1`` symbols). This is a
+    binned form of the interval history of continuous-time transfer entropy
+    :cite:`Shorten2021`. Equal-frequency bins of the intervals are those of their
+    logarithm, which make interval entropies independent of the firing rate and less
+    biased than linear interval bins :cite:`Dorval2008,Dorval2011`. The elapsed time
+    gets its own edges because it ranges over the whole interval, where the hazard of
+    a renewal neuron rises, and edges at interval quantiles would lump all of its
+    early part into one bin. The present is the spike indicator of bin ``t``.
+    """
+
+    k: int = 1
+    bins: int = 3
+    max_interval: int = 50
+    elapsed_edges: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    interval_edges: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    rank_based = True
+    present_alphabet = 2
+
+    def _elapsed(self, x):
+        spikes = np.flatnonzero(_spike_indicator(x))
+        t = np.arange(len(x))
+        n = np.searchsorted(spikes, t, side="right")
+        elapsed = t[n > 0] - spikes[n[n > 0] - 1]
+        return elapsed[elapsed < self.max_interval]
+
+    def fit(self, series):
+        probs = np.linspace(0, 1, self.bins + 1)[1:-1]
+
+        def edges(values):
+            if not len(values):
+                return np.zeros(self.bins - 1)
+            return np.quantile(values, probs, method="inverted_cdf").astype(float)
+
+        self.elapsed_edges = edges(np.concatenate([self._elapsed(s) for s in series]))
+        self.interval_edges = edges(_pooled_intervals(series))
+        self.past_alphabet = self.bins**self.k + 1
+        self.lag_step = self.max_interval
+        return self
+
+    def encode(self, x):
+        s = _spike_indicator(x)
+        spikes = np.flatnonzero(s)
+        N, offset = len(s), self.max_interval - 1
+        past = np.full(N, -1, dtype=np.int64)
+        if offset < N:
+            t = np.arange(offset, N)
+            n = np.searchsorted(spikes, t, side="right")
+            ok = n >= self.k
+            idx = np.where(ok, n, self.k)
+            if len(spikes):
+                ok &= t - spikes[np.minimum(idx - self.k, len(spikes) - 1)] < self.max_interval
+            code = np.zeros(len(t), dtype=np.int64)
+            if ok.any():
+                tt, nn = t[ok], n[ok]
+                codes = [np.searchsorted(self.elapsed_edges, tt - spikes[nn - 1], side="right")] + [
+                    np.searchsorted(self.interval_edges, spikes[nn - i] - spikes[nn - i - 1], side="right")
+                    for i in range(1, self.k)
+                ]
+                for c in codes:
+                    code[ok] = code[ok] * self.bins + c
+            past[offset:] = np.where(ok, code, self.bins**self.k)
+        return Encoding(past, s, offset, 0)
+
+    def params(self):
+        return {"name": "SpikeIntervals", "k": self.k, "bins": self.bins, "max_interval": self.max_interval}
+
+
+@dataclass(repr=False)
+class OrdinalIntervals(Discretizer):
+    """
+    Ordinal pattern of the most recent inter-spike intervals.
+
+    The past symbol at time ``t`` is the ordinal pattern :cite:`Bandt2002` of the
+    `order` intervals between the ``order + 1`` most recent spikes (oldest first),
+    or one extra symbol if those spikes do not all fall in the last `max_interval`
+    bins (``order! + 1`` symbols). Ordinal patterns of interval sequences carry the
+    temporal structure of firing, invariant to any monotone rescaling of the
+    intervals :cite:`Masoliver2020`. The present is the spike indicator of bin ``t``.
+    """
+
+    order: int = 3
+    max_interval: int = 50
+    ties: str = "first"
+    rank_based = True
+    present_alphabet = 2
+
+    def fit(self, series):
+        self.past_alphabet = factorial(self.order) + 1
+        self.lag_step = self.max_interval
+        return self
+
+    def encode(self, x):
+        s = _spike_indicator(x)
+        spikes = np.flatnonzero(s)
+        N, offset, m = len(s), self.max_interval - 1, self.order
+        past = np.full(N, -1, dtype=np.int64)
+        if offset < N:
+            t = np.arange(offset, N)
+            symbol = np.full(len(t), factorial(m), dtype=np.int64)
+            intervals = np.diff(spikes)
+            if len(intervals) >= m:
+                patterns = np.asarray(ordinal_patterns(intervals.astype(float), m, 1, self.ties))
+                n = np.searchsorted(spikes, t, side="right")
+                ok = n >= m + 1
+                oldest = spikes[np.where(ok, n - m - 1, 0)]
+                ok &= t - oldest < self.max_interval
+                symbol[ok] = patterns[n[ok] - 1 - m]
+            past[offset:] = symbol
+        return Encoding(past, s, offset, 0)
+
+    def params(self):
+        return {"name": "OrdinalIntervals", "order": self.order, "max_interval": self.max_interval, "ties": self.ties}
 
 
 def discretize(data, discretizers, names=None):

@@ -30,6 +30,7 @@ and false-discovery-rate control.
    auto
    layers
    preprocessing
+   spikes
    skeleton
    interpretation
    hyperedges
