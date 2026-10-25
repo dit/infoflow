@@ -93,6 +93,8 @@ def compare_networks(
     dependent=False,
     n_perm=200,
     alpha=0.05,
+    curtail=None,
+    map_fn=map,
     prng=None,
 ):
     """
@@ -102,6 +104,9 @@ def compare_networks(
     ----------
     net_a, net_b : MultiplexNetwork
         Networks inferred under conditions A and B (their skeletons define the union).
+        Skeletons selected on each condition's own units make the test
+        anti-conservative; pass one network selected on both conditions pooled as
+        both arguments for an exact permutation test.
     data_a, data_b : DiscreteData or list of DiscreteData
         For ``design='within'``, one DiscreteData per condition whose trials are the
         units. For ``design='between'``, a list of per-subject DiscreteData.
@@ -111,6 +116,15 @@ def compare_networks(
     n_perm : int
     alpha : float
         FDR level per layer.
+    curtail : int, None
+        Sequential Monte Carlo p-values :cite:`Besag1991`: an edge's permutations stop
+        once every layer's permuted difference has reached the observed one `curtail`
+        times, and a layer that reached it after ``L`` permutations gets p-value
+        ``curtail / L``. Still valid, and edges with large p-values stop after a few
+        dozen permutations instead of `n_perm`. None runs all `n_perm`.
+    map_fn : callable
+        ``map``-like function over edges (e.g. from :mod:`infoflow.parallel`). Each
+        edge's permutations use a seed drawn up front, so results do not depend on it.
     prng : None, int, Generator
 
     Returns
@@ -148,24 +162,39 @@ def compare_networks(
             b = _edge_values(_pool([u for u, g in zip(units, lab, strict=True) if g == 1]), e[1], *edges[e])
             return np.array([a[k] for k in LAYERS]), np.array([b[k] for k in LAYERS])
 
-    def permuted():
+    def permuted(edge_rng):
         if dependent:
             n = len(units_a)
-            swap = rng.random(n) < 0.5
+            swap = edge_rng.random(n) < 0.5
             lab = labels.copy()
             lab[:n][swap], lab[n:][swap] = 1, 0
             return lab
-        return rng.permutation(labels)
+        return edge_rng.permutation(labels)
+
+    def test(job):
+        e, seed = job
+        edge_rng = np.random.default_rng(seed)
+        a, b = statistic(labels, e)
+        observed = np.abs(a - b) - 1e-12
+        exceed = np.zeros(len(LAYERS), dtype=np.int64)
+        reached = np.zeros(len(LAYERS), dtype=np.int64)
+        for i in range(1, n_perm + 1):
+            exceed += np.abs(np.subtract(*statistic(permuted(edge_rng), e))) >= observed
+            if curtail is not None:
+                reached[(reached == 0) & (exceed >= curtail)] = i
+                if reached.all():
+                    break
+        p = (1 + exceed) / (1 + n_perm)
+        if curtail is not None:
+            p = np.where(reached > 0, curtail / np.maximum(reached, 1), p)
+        return e, a, b, np.where(np.isnan(observed), np.nan, p)
 
     shape = (len(LAYERS), P, P)
     va, vb, diff, pvalue = (np.full(shape, np.nan) for _ in range(4))
-    for e in edges:
-        a, b = statistic(labels, e)
-        observed = a - b
-        null = np.array([np.subtract(*statistic(permuted(), e)) for _ in range(n_perm)])
-        s, t = e
-        va[:, s, t], vb[:, s, t], diff[:, s, t] = a, b, observed
-        pvalue[:, s, t] = (1 + np.sum(np.abs(null) >= np.abs(observed) - 1e-12, axis=0)) / (1 + n_perm)
+    seeds = rng.integers(0, 2**32, size=len(edges))
+    for (s, t), a, b, p in map_fn(test, list(zip(edges, (int(x) for x in seeds), strict=True))):
+        va[:, s, t], vb[:, s, t], diff[:, s, t] = a, b, a - b
+        pvalue[:, s, t] = p
     significant, adjusted = adjust_layer_pvalues({k: pvalue[i] for i, k in enumerate(LAYERS)}, alpha)
     ds = xr.Dataset(
         {
@@ -177,6 +206,6 @@ def compare_networks(
             "significant": (("layer", "source", "target"), np.stack([significant[k] for k in LAYERS])),
         },
         coords={"layer": list(LAYERS), "source": names, "target": names},
-        attrs={"design": design, "dependent": int(dependent), "n_perm": n_perm},
+        attrs={"design": design, "dependent": int(dependent), "n_perm": n_perm, "curtail": curtail or 0},
     )
     return NetworkComparison(ds, edges)

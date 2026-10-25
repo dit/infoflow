@@ -49,6 +49,32 @@ def test_compare_within_no_difference():
     assert np.nanmax(np.abs(result.dataset["difference"].values)) < 0.03
 
 
+def test_compare_curtailed_and_parallel():
+    a, b = _coupled_trials(0.9, 10, 300, seed=0), _coupled_trials(0.5, 10, 300, seed=1)
+    net_a, net_b = _net(a), _net(b)
+    full = compare_networks(net_a, net_b, a, b, n_perm=99, prng=0)
+    curtailed = compare_networks(net_a, net_b, a, b, n_perm=99, curtail=5, prng=0)
+    parallel = compare_networks(net_a, net_b, a, b, n_perm=99, curtail=5, map_fn=thread_map(4), prng=0)
+    assert np.array_equal(curtailed.dataset["pvalue"].values, parallel.dataset["pvalue"].values, equal_nan=True)
+    assert np.array_equal(full.dataset["significant"].values, curtailed.dataset["significant"].values)
+    p = curtailed.dataset["pvalue"].values
+    # A curtailed p-value is curtail / L for some L <= n_perm.
+    tested = np.isfinite(p) & (p > 0.06)
+    assert np.allclose(5 / p[tested], np.round(5 / p[tested]))
+
+
+def test_compare_within_null_is_calibrated_with_pooled_selection():
+    pooled = _coupled_trials(0.8, 40, 200, seed=7)
+    halves = []
+    for seed in range(20):
+        idx = np.random.default_rng(seed).permutation(40)
+        a, b = pooled.subset_trials(list(idx[:20])), pooled.subset_trials(list(idx[20:]))
+        net = _net(pooled)
+        result = compare_networks(net, net, a, b, n_perm=39, curtail=5, prng=seed)
+        halves.append(bool(result.dataset["significant"].values.any()))
+    assert sum(halves) <= 3
+
+
 def test_compare_between_dependent():
     subjects_a = [_coupled_trials(0.9, 2, 400, seed=s) for s in range(6)]
     subjects_b = [_coupled_trials(0.4, 2, 400, seed=100 + s) for s in range(6)]
