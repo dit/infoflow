@@ -39,11 +39,17 @@ Pipeline
    target that tests nonlinear only if the Gaussian estimator's parents predict it at
    least as well as the plug-in's (below). Every
    selection stage is tested at 0.001, with enough permutations for the split level
-   and curtailment (which never changes a decision).
+   and curtailment (which never changes a decision). That check runs a Gaussian
+   selection with a local permutation null per nonlinear target, which can take
+   minutes per target on long, finely binned series; with a ``time_budget`` it runs
+   ``threads`` targets at a time and stops once the rest would take the run past half
+   the budget, and the unchecked targets select with the plug-in only (a recorded
+   downgrade).
 3. **Pilot.** The selection is run on three sampled targets, with the seeds the full
    run will use, so their skeletons are reused. The pilot measures the time per
    target of each estimator, the time per edge of the layers (at the resample count
-   the run will use), and of interpretation.
+   the run will use), and of interpretation. If no pilot target uses the Gaussian
+   estimator, its time is taken from the check above.
 4. **Fit the budget.** The cost of the whole run is predicted from the pilot
    (targets, then edges, run ``threads`` at a time). If it exceeds ``time_budget``,
    options are dropped in a fixed order, KSG selection, layer estimates for

@@ -86,6 +86,9 @@ _PRESCREEN_ABOVE = 30
 _PILOT_TARGETS = 3
 _MAX_RESAMPLES = 2000
 _LAYER_ALPHA = 0.05
+# The Gaussian check of nonlinear targets runs before the pilot can size the run, so it
+# stops early rather than spend more than this fraction of the budget.
+_GATE_BUDGET_FRACTION = 0.5
 
 
 @dataclass
@@ -295,16 +298,18 @@ def parent_prediction_error(data, target, variables, folds=5, k_fraction=0.02):
 def _gaussian_ratio(data, target, embeddings, plugin_settings, gaussian_settings, seed):
     """
     The nearest-neighbour prediction error of the Gaussian estimator's parent set over the
-    plug-in's, each selected alone.
+    plug-in's, each selected alone, and the seconds the Gaussian selection took.
     """
 
     def chosen(settings):
         sk = select_parents(data, target, embeddings, None, settings, seed)
-        return list(sk.target_past) + (list(sk.sources) if sk.significant else [])
+        return list(sk.target_past) + (list(sk.sources) if sk.significant else []), sk.timing
 
-    plugin = parent_prediction_error(data, target, chosen(plugin_settings))
-    gaussian = parent_prediction_error(data, target, chosen(gaussian_settings))
-    return gaussian / plugin if plugin > 0 else 1.0
+    plugin_vars, _ = chosen(plugin_settings)
+    gaussian_vars, timing = chosen(gaussian_settings)
+    plugin = parent_prediction_error(data, target, plugin_vars)
+    gaussian = parent_prediction_error(data, target, gaussian_vars)
+    return (gaussian / plugin if plugin > 0 else 1.0), float(timing.get("gaussian", 0.0))
 
 
 def linearity_pvalues(data, targets=None, max_lag=5, max_regressors=None, bins=4):
@@ -623,6 +628,7 @@ def infer(
     # Gaussian estimator alone (local null), and keep the Gaussian estimator only where its
     # parents predict the target at least as well by a nonparametric referee.
     keep_gaussian, drop_gaussian = [], list(nonlinear)
+    gate_downgrades, gaussian_seconds = [], []
     if nonlinear:
         pinned_base = {k: v for k, v in pinned_skeleton.items() if k != "estimator"}
         plugin_alone = _skeleton_settings(("plugin",), options["prescreen"], 1, device, pinned_base)
@@ -635,9 +641,29 @@ def infer(
             t, seed = args
             return t, _gaussian_ratio(discrete, t, embeddings, plugin_alone, gaussian_alone, int(seed))
 
-        ratios = dict(thread_map(threads)(ratio, list(zip(nonlinear, choice_seeds, strict=True))))
-        keep_gaussian = [t for t in nonlinear if ratios[t] < 1.0]
-        drop_gaussian = [t for t in nonlinear if ratios[t] >= 1.0]
+        jobs = list(zip(nonlinear, choice_seeds, strict=True))
+        # Without a budget all checks run at once; with one, in rounds that stop when the
+        # rest is predicted to take the run past a fraction of the budget.
+        batch = len(jobs) if budget is None else threads
+        ratios, round_seconds = {}, []
+        for i in range(0, len(jobs), batch):
+            round_start = time.perf_counter()
+            for t, (r, seconds) in thread_map(threads)(ratio, jobs[i : i + batch]):
+                ratios[t] = r
+                gaussian_seconds.append(seconds)
+            round_seconds.append(time.perf_counter() - round_start)
+            left = len(jobs) - len(ratios)
+            if budget is not None and left:
+                projected = time.perf_counter() - started + float(np.mean(round_seconds)) * _rounds(left, batch)
+                if projected > _GATE_BUDGET_FRACTION * budget:
+                    gate_downgrades.append(
+                        f"skipped the Gaussian check for {left} nonlinear target(s): predicted "
+                        f"{timedelta(seconds=round(projected))} > {_GATE_BUDGET_FRACTION:.0%} of the budget "
+                        f"{timedelta(seconds=round(budget))}; they select with the plug-in only"
+                    )
+                    break
+        keep_gaussian = [t for t in nonlinear if ratios.get(t, 1.0) < 1.0]
+        drop_gaussian = [t for t in nonlinear if t not in keep_gaussian]
         diagnostics["gaussian_ratio"] = ratios
         diagnostics["gaussian_kept"] = keep_gaussian
 
@@ -671,6 +697,9 @@ def infer(
         name: float(np.mean([sk.timing[name] for sk in pilot_skeletons.values() if name in sk.timing] or [0.0]))
         for name in cheap["estimators"]
     }
+    if "gaussian" in member_seconds and member_seconds["gaussian"] == 0.0 and gaussian_seconds:
+        # No pilot target used the Gaussian estimator; the gate timed it (local null) on others.
+        member_seconds["gaussian"] = float(np.mean(gaussian_seconds))
     if "ksg" in estimators and "ksg" not in cheap["estimators"]:
         t0 = pilot_targets[0]
         member_seconds["ksg"] = _ksg_seconds(
@@ -700,9 +729,10 @@ def infer(
     # Preprocessing, the linearity test, and the pilot are already spent.
     elapsed = time.perf_counter() - started
     remaining = None if budget is None else max(0.0, budget - elapsed)
-    final, report.downgrades, predicted = _fit_budget(
+    final, downgrades, predicted = _fit_budget(
         options, pilot, len(targets), map_threads(options), remaining, pinned_skeleton | pinned_infer
     )
+    report.downgrades = gate_downgrades + downgrades
     if budget is not None and pinned_infer.get("machines"):
         report.warnings.append("the predicted time excludes the machine layer (machines=True runs outside the budget)")
     report.predicted_seconds = elapsed + predicted

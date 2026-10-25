@@ -260,6 +260,26 @@ def test_infer_gates_gaussian_per_target():
     assert all(r >= 1.0 for r in report.diagnostics["gaussian_ratio"].values())
 
 
+def test_gaussian_gate_stops_within_the_budget(monkeypatch):
+    calls = []
+
+    def ratio(data, target, *args):
+        calls.append(target)
+        return 2.0, 5.0
+
+    monkeypatch.setattr(auto, "_gaussian_ratio", ratio)
+    monkeypatch.setattr(auto, "_GATE_BUDGET_FRACTION", 0.0)
+    result = auto.infer(
+        datasets.mute_network(3000, seed=0), preset="fast", max_lag=5, threads=1, time_budget="1h", prng=0
+    )
+    report = result.report
+    assert report.diagnostics["nonlinear_targets"] == [1, 3]
+    assert calls == [1] and list(report.diagnostics["gaussian_ratio"]) == [1]
+    assert report.downgrades[0].startswith("skipped the Gaussian check for 1 nonlinear target(s)")
+    # The unchecked target selects with the plug-in only, like a target that failed the check.
+    assert result.network.settings["skeleton_settings"].target_estimators == {1: ("plugin",), 3: ("plugin",)}
+
+
 @pytest.mark.slow
 def test_presets_use_network_resolution_on_lorenz96():
     from infoflow.benchmarks import lorenz96_graph
