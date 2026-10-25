@@ -542,7 +542,8 @@ def _network_resolution(trials, results, discretizers, embeddings, settings, mod
     network = {"bins": B, "history": L, "scores": scores, "retained": retained, "adopted": bool(adopted)}
     if adopted:
         discretizers = [EqualFrequency(B) for _ in discretizers]
-        embeddings = [Embedding(max_lag=L) for _ in embeddings]
+        # The uniform history sets the context resolution, not how far back sources may act.
+        embeddings = [Embedding(max_lag=max(L, e.max_lag), tau=e.tau) for e in embeddings]
     return discretizers, embeddings, network
 
 
