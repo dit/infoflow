@@ -274,10 +274,25 @@ def test_gaussian_gate_stops_within_the_budget(monkeypatch):
     )
     report = result.report
     assert report.diagnostics["nonlinear_targets"] == [1, 3]
-    assert calls == [1] and list(report.diagnostics["gaussian_ratio"]) == [1]
-    assert report.downgrades[0].startswith("skipped the Gaussian check for 1 nonlinear target(s)")
-    # The unchecked target selects with the plug-in only, like a target that failed the check.
+    assert calls == [] and report.diagnostics["gaussian_ratio"] == {}
+    assert report.downgrades[0].startswith("skipped the Gaussian check for 2 nonlinear target(s)")
+    # Unchecked targets select with the plug-in only, like targets that failed the check.
     assert result.network.settings["skeleton_settings"].target_estimators == {1: ("plugin",), 3: ("plugin",)}
+
+
+def test_late_targets_select_with_the_plugin_within_the_budget(monkeypatch):
+    data = datasets.mute_network(3000, seed=0)
+    on_time = auto.infer(data, preset="fast", max_lag=5, threads=1, time_budget="1h", prng=0)
+    assert not any("plug-in only: started after" in d for d in on_time.report.downgrades)
+    monkeypatch.setattr(auto, "_SELECTION_BUDGET_FRACTION", 0.0)
+    late = auto.infer(data, preset="fast", max_lag=5, threads=1, time_budget="1h", prng=0)
+    pilot = set(late.report.pilot["targets"])
+    message = next(d for d in late.report.downgrades if "plug-in only: started after" in d)
+    assert f"selected {len(late.network.skeleton) - len(pilot)} target(s)" in message
+    assert all(name == "plugin" for (s, t), name in late.report.admitted.items() if t not in pilot)
+    # Without a budget the selection is unchanged.
+    free = auto.infer(data, preset="fast", max_lag=5, threads=1, prng=0)
+    assert np.array_equal(free.network.dataset["significant"].values, on_time.network.dataset["significant"].values)
 
 
 @pytest.mark.slow
