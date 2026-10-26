@@ -125,7 +125,8 @@ def test_network_resolution_adopted_only_when_every_node_keeps_its_score():
     net = lorenz.report.network
     assert net["adopted"] and min(net["retained"]) >= 0.7
     assert {str(d) for d in lorenz.data.discretizers} == {f"EqualFrequency(bins={net['bins']})"}
-    assert all(e.max_lag == net["history"] for e in lorenz.embeddings)
+    budgets = [n.lag_budget for n in lorenz.report.nodes]
+    assert [e.max_lag for e in lorenz.embeddings] == [min(2, max(net["history"], b)) for b in budgets]
     assert "network resolution" in lorenz.report.summary()
 
     mute = preprocess(datasets.mute_network(3000, seed=0), max_lag=5, network_resolution="auto", prng=0)
@@ -133,3 +134,28 @@ def test_network_resolution_adopted_only_when_every_node_keeps_its_score():
     forced = preprocess(datasets.mute_network(3000, seed=0), max_lag=5, network_resolution=True, prng=0)
     assert forced.report.network["adopted"]
     assert preprocess(datasets.mute_network(500, seed=0), max_lag=3, prng=0).report.network == {}
+
+
+def test_network_resolution_keeps_each_nodes_lag_budget():
+    forced = preprocess(datasets.mute_network(3000, seed=0), max_lag=8, network_resolution=True, prng=0)
+    history = forced.report.network["history"]
+    budgets = [min(8, max(history, n.lag_budget)) for n in forced.report.nodes]
+    assert [e.max_lag for e in forced.embeddings] == budgets
+    assert max(budgets) > history
+
+
+def test_score_contexts_without_scorable_folds():
+    from infoflow.preprocess.scoring import context_codes, score_contexts
+
+    series = [np.random.default_rng(i).normal(size=12) for i in range(3)]
+    symbols = [np.searchsorted([0.0], s) for s in series]
+    mean, se, per, folds = score_contexts(context_codes(symbols, [1, 2], 2), series)
+    assert mean == 0.0 and np.isinf(se) and len(folds) == 0
+    assert all(v[0] == 0.0 for v in per.values())
+
+
+def test_preprocess_short_trials():
+    rng = np.random.default_rng(0)
+    trials = [np.cumsum(rng.normal(size=(80, 2)), axis=0) for _ in range(60)]
+    result = preprocess(trials, max_lag=5, prng=0)
+    assert result.data.n_trials == 60 and len(result.embeddings) == 2

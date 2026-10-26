@@ -50,7 +50,9 @@ resolutions for parent selection instead
 (:func:`~infoflow.preprocess.scoring.network_scores`: each target predicted from its
 own past and its two most correlated sources, every variable in the same
 equal-frequency bins) and gives every node the best one, provided every node keeps
-at least ``network_retention`` (default 0.7) of its own per-node score.
+at least ``network_retention`` (default 0.7) of its own per-node score. The uniform
+history sets the resolution of the contexts; each node keeps its own lag budget
+(at least that history), so sources acting at longer delays remain candidates.
 
 The guard protects nodes whose own dynamics need fine symbols. On the MuTE network
 the oscillating driver keeps only 30-60% of its score at the network resolution;

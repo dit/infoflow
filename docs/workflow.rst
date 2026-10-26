@@ -10,6 +10,24 @@ conditions on the union of their edges, for trials within a subject
 (``dependent=True``) or independent units. Condition labels are permuted (swapped
 within pairs when dependent) and p-values are corrected per layer.
 
+The permutation test is exact only if the tested edges do not depend on the labels.
+Edges selected separately in each condition are partly selected *because* of
+chance differences between the conditions, which the permutations then destroy: on
+random halves of one condition of an iEEG dataset, 13-15% of splits gave a
+significant intrinsic or synergistic difference instead of 5%. For a calibrated
+test, select one network on both conditions pooled and pass it as both networks:
+
+.. code-block:: python
+
+    pooled = infoflow.infer_multiplex(data.subset_trials(idx_a + idx_b), prng=0)
+    cmp = compare_networks(pooled, pooled, data.subset_trials(idx_a), data.subset_trials(idx_b))
+
+Every permutation re-estimates every tested edge, which is slow for finely binned
+contexts. ``curtail=10`` stops an edge's permutations once each layer's permuted
+difference has reached the observed one ten times (sequential Monte Carlo p-values,
+:cite:`Besag1991`), which leaves small p-values unchanged and stops edges with large
+ones early; ``map_fn`` runs edges in parallel.
+
 Parallelism
 -----------
 

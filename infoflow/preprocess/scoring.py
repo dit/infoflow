@@ -63,6 +63,8 @@ def _fold_scores(contexts, targets, B, folds, gap, alpha=0.5):
     ctx = np.concatenate([c for c, _ in contexts])
     tgt = np.concatenate([targets[i][t] for i, (_, t) in enumerate(contexts)])
     trial = np.concatenate([np.full(len(c), i) for i, (c, _) in enumerate(contexts)])
+    if len(ctx) == 0:
+        return np.array([])
     _, ctx = np.unique(ctx, return_inverse=True)
     ctx = ctx.ravel()
     n = len(ctx)
@@ -143,7 +145,8 @@ def score_contexts(contexts, raw_series, resolutions=(2, 4, 8), folds=5, gap=1, 
             per[B] = _fold_scores(contexts, reference_codes(raw_series, B), B, folds, gap)
     k = min(len(v) for v in per.values())
     if k == 0:
-        return 0.0, np.inf, per, np.zeros(0)
+        # No fold has enough held-out windows (e.g. the context spans most of each trial).
+        return 0.0, np.inf, {B: (0.0, v) for B, v in per.items()}, np.zeros(0)
     fold_scores = np.mean([v[:k] for v in per.values()], axis=0)
     se = float(np.std(fold_scores, ddof=1) / np.sqrt(k)) if k > 1 else np.inf
     return float(np.mean(fold_scores)), se, {B: (float(np.mean(v)), v) for B, v in per.items()}, fold_scores

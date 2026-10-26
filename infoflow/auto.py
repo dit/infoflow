@@ -86,6 +86,11 @@ _PRESCREEN_ABOVE = 30
 _PILOT_TARGETS = 3
 _MAX_RESAMPLES = 2000
 _LAYER_ALPHA = 0.05
+# With a budget, checks and targets not started by these fractions of it are skipped or
+# selected with the plug-in only: per-target selection times are heavy-tailed, so the
+# pilot's prediction alone cannot keep a run within its budget.
+_GATE_BUDGET_FRACTION = 0.5
+_SELECTION_BUDGET_FRACTION = 0.8
 
 
 @dataclass
@@ -295,16 +300,18 @@ def parent_prediction_error(data, target, variables, folds=5, k_fraction=0.02):
 def _gaussian_ratio(data, target, embeddings, plugin_settings, gaussian_settings, seed):
     """
     The nearest-neighbour prediction error of the Gaussian estimator's parent set over the
-    plug-in's, each selected alone.
+    plug-in's, each selected alone, and the seconds the Gaussian selection took.
     """
 
     def chosen(settings):
         sk = select_parents(data, target, embeddings, None, settings, seed)
-        return list(sk.target_past) + (list(sk.sources) if sk.significant else [])
+        return list(sk.target_past) + (list(sk.sources) if sk.significant else []), sk.timing
 
-    plugin = parent_prediction_error(data, target, chosen(plugin_settings))
-    gaussian = parent_prediction_error(data, target, chosen(gaussian_settings))
-    return gaussian / plugin if plugin > 0 else 1.0
+    plugin_vars, _ = chosen(plugin_settings)
+    gaussian_vars, timing = chosen(gaussian_settings)
+    plugin = parent_prediction_error(data, target, plugin_vars)
+    gaussian = parent_prediction_error(data, target, gaussian_vars)
+    return (gaussian / plugin if plugin > 0 else 1.0), float(timing.get("gaussian", 0.0))
 
 
 def linearity_pvalues(data, targets=None, max_lag=5, max_regressors=None, bins=4):
@@ -623,6 +630,7 @@ def infer(
     # Gaussian estimator alone (local null), and keep the Gaussian estimator only where its
     # parents predict the target at least as well by a nonparametric referee.
     keep_gaussian, drop_gaussian = [], list(nonlinear)
+    gate_downgrades, gaussian_seconds = [], []
     if nonlinear:
         pinned_base = {k: v for k, v in pinned_skeleton.items() if k != "estimator"}
         plugin_alone = _skeleton_settings(("plugin",), options["prescreen"], 1, device, pinned_base)
@@ -633,11 +641,24 @@ def infer(
 
         def ratio(args):
             t, seed = args
+            if budget is not None and time.perf_counter() - started > _GATE_BUDGET_FRACTION * budget:
+                return t, None
             return t, _gaussian_ratio(discrete, t, embeddings, plugin_alone, gaussian_alone, int(seed))
 
-        ratios = dict(thread_map(threads)(ratio, list(zip(nonlinear, choice_seeds, strict=True))))
-        keep_gaussian = [t for t in nonlinear if ratios[t] < 1.0]
-        drop_gaussian = [t for t in nonlinear if ratios[t] >= 1.0]
+        ratios, skipped = {}, []
+        for t, out in thread_map(threads)(ratio, list(zip(nonlinear, choice_seeds, strict=True))):
+            if out is None:
+                skipped.append(t)
+            else:
+                ratios[t] = out[0]
+                gaussian_seconds.append(out[1])
+        if skipped:
+            gate_downgrades.append(
+                f"skipped the Gaussian check for {len(skipped)} nonlinear target(s) not started within "
+                f"{_GATE_BUDGET_FRACTION:.0%} of the budget; they select with the plug-in only"
+            )
+        keep_gaussian = [t for t in nonlinear if ratios.get(t, 1.0) < 1.0]
+        drop_gaussian = [t for t in nonlinear if t not in keep_gaussian]
         diagnostics["gaussian_ratio"] = ratios
         diagnostics["gaussian_kept"] = keep_gaussian
 
@@ -671,6 +692,9 @@ def infer(
         name: float(np.mean([sk.timing[name] for sk in pilot_skeletons.values() if name in sk.timing] or [0.0]))
         for name in cheap["estimators"]
     }
+    if "gaussian" in member_seconds and member_seconds["gaussian"] == 0.0 and gaussian_seconds:
+        # No pilot target used the Gaussian estimator; the gate timed it (local null) on others.
+        member_seconds["gaussian"] = float(np.mean(gaussian_seconds))
     if "ksg" in estimators and "ksg" not in cheap["estimators"]:
         t0 = pilot_targets[0]
         member_seconds["ksg"] = _ksg_seconds(
@@ -700,9 +724,10 @@ def infer(
     # Preprocessing, the linearity test, and the pilot are already spent.
     elapsed = time.perf_counter() - started
     remaining = None if budget is None else max(0.0, budget - elapsed)
-    final, report.downgrades, predicted = _fit_budget(
+    final, downgrades, predicted = _fit_budget(
         options, pilot, len(targets), map_threads(options), remaining, pinned_skeleton | pinned_infer
     )
+    report.downgrades = gate_downgrades + downgrades
     if budget is not None and pinned_infer.get("machines"):
         report.warnings.append("the predicted time excludes the machine layer (machines=True runs outside the budget)")
     report.predicted_seconds = elapsed + predicted
@@ -729,6 +754,31 @@ def infer(
         if final_settings == pilot_settings and pinned_infer.get("holdout") is None:
             for t, sk in pilot_skeletons.items():
                 checkpoint.put(f"skeleton-{t}", sk)
+        if budget is not None and pinned_infer.get("holdout") is None:
+            # Select here, with the seeds infer_skeleton would use, so targets that start late
+            # can fall back to the plug-in; infer_multiplex then reads them from the checkpoint.
+            fallback = final_settings
+            if "estimator" not in overrides:
+                fallback = settings_for(dict(final, estimators=("plugin",)), map_threads(final))
+            deadline = started + _SELECTION_BUDGET_FRACTION * budget
+            late = []
+
+            def select(t):
+                if f"skeleton-{t}" in checkpoint:
+                    return t, checkpoint.get(f"skeleton-{t}")
+                settings = final_settings
+                if time.perf_counter() > deadline:
+                    settings = fallback
+                    late.append(t)
+                return t, select_parents(discrete, t, embeddings, None, settings, seed_of[t])
+
+            for t, sk in thread_map(map_threads(final))(select, targets):
+                checkpoint.put(f"skeleton-{t}", sk)
+            if late and fallback != final_settings:
+                report.downgrades.append(
+                    f"selected {len(late)} target(s) with the plug-in only: started after "
+                    f"{_SELECTION_BUDGET_FRACTION:.0%} of the budget ({', '.join(map(str, sorted(late)))})"
+                )
         kwargs = {
             "embeddings": embeddings,
             "names": names,

@@ -39,17 +39,26 @@ Pipeline
    target that tests nonlinear only if the Gaussian estimator's parents predict it at
    least as well as the plug-in's (below). Every
    selection stage is tested at 0.001, with enough permutations for the split level
-   and curtailment (which never changes a decision).
+   and curtailment (which never changes a decision). That check runs a Gaussian
+   selection with a local permutation null per nonlinear target, which can take
+   minutes per target on long, finely binned series; with a ``time_budget``, checks
+   not started within half the budget are skipped and those targets select with the
+   plug-in only (a recorded downgrade).
 3. **Pilot.** The selection is run on three sampled targets, with the seeds the full
    run will use, so their skeletons are reused. The pilot measures the time per
    target of each estimator, the time per edge of the layers (at the resample count
-   the run will use), and of interpretation.
+   the run will use), and of interpretation. If no pilot target uses the Gaussian
+   estimator, its time is taken from the check above.
 4. **Fit the budget.** The cost of the whole run is predicted from the pilot
    (targets, then edges, run ``threads`` at a time). If it exceeds ``time_budget``,
    options are dropped in a fixed order, KSG selection, layer estimates for
    shared-only candidates, hyperedges, then the source pre-screen is turned on,
    until it fits; the significance level is never loosened. With
-   ``strict_budget=True`` an unattainable budget raises instead of warning.
+   ``strict_budget=True`` an unattainable budget raises instead of warning. Because
+   selection times vary by orders of magnitude between targets (one Gaussian selection
+   with a local null took 47 s and another nearly an hour on the same iEEG data), the
+   prediction is also enforced: targets not started within 80% of the budget select
+   with the plug-in only, and the report lists them.
 5. **Run** :func:`~infoflow.infer_multiplex` and return an
    :class:`~infoflow.auto.AutoResult` with the network and an
    :class:`~infoflow.auto.AutoReport`: diagnostics, gated targets, the final
