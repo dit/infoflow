@@ -102,10 +102,35 @@ R1065J 6 / 6 / 6, R1332M 2 / 2 / 2, R1364C 6 / 8 / 6 (plug-in / Miller-Madow / C
 none with any estimator on surrogates whose channels' trials are permuted independently.
 CWJ took 1.3-2.6x as long.
 
+## 4. Both changes together on other benchmarks
+
+`validation/new_defaults.py`: *current* (plug-in selection, Miller-Madow layers) against
+*proposed* (Miller-Madow selection, CWJ layers), same seeds and data. Paired over
+networks or instances (better / worse counts in parentheses).
+
+| Benchmark | Metric | Current | Proposed |
+|---|---|---|---|
+| VAR, 10 nodes, 500 / 2000 samples | edge recall | 0.12 / 0.33 | 0.17 / 0.39 (4/0, 3/0) |
+| | edge precision | 0.59 / 0.84 | 0.89 / 0.87 |
+| | intrinsic-layer recall (2000) | 0.29 | 0.39 (4/0), precision 0.98 -> 0.97 |
+| Logistic maps, 500 / 2000 | edge recall | 0.20 / 0.49 | 0.24 / 0.56 (3/0, 4/0) |
+| | intrinsic-layer recall (2000) | 0.35 | 0.54 (5/0), precision 1.00 -> 1.00 |
+| Lorenz-96, 10 nodes, 1000 | edge recall / precision | 0.28 / 0.91 | 0.33 / 0.98 (4/0) |
+| | intrinsic-layer recall | 0.04 | 0.33 (5/0), precision 0.98 |
+| Motifs, 20 replications | six layer and role checks | 1.00, 1.00, 1.00, 1.00, 1.00, 0.95 | 1.00, 1.00, 1.00, 1.00, 0.95, 0.90 (chain checks) |
+| NetSim, sims 1-4 x 5 subjects, `auto` | AUROC | 0.625 | 0.627 (9/11) |
+| CausalRivers, 20 three-station graphs, `auto` | AUROC / recall | 0.581 / 0.50 | 0.525 / 0.45 (2/6) |
+
+Synthetic networks run 50% longer. On CausalRivers the whole loss comes from the
+selection change: Miller-Madow selection alone gives the same 0.525, CWJ layers alone
+give exactly the current results. NetSim is unchanged because `auto` finds almost no
+edges there either way (recall 0.001) and its scores barely move.
+
 ## Recommendation
 
-Use `estimator="chao_wang_jost"` for layer estimates when contexts are large relative to
-the data (it is the best accuracy for its cost here), and
-`SkeletonSettings(entropy_estimator="miller_madow")` for selection (a free gain in
-recall and precision on both synthetic network types). Making them defaults would
-change every existing result, so that is left as a separate decision.
+CWJ layers are a safe default: they improved every synthetic benchmark (most of all the
+intrinsic layer's recall) and changed nothing on NetSim or CausalRivers. Miller-Madow
+selection helps the synthetic networks but costs CausalRivers 0.06 AUROC, the one
+real-data benchmark with known structure, so it should stay an option rather than the
+default. Making either a default changes existing results, so that is left as a
+separate decision.
