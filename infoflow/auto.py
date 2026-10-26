@@ -37,6 +37,7 @@ from dit.inference._symbols import as_generator
 from .checkpoint import Checkpoint
 from .data import DiscreteData, as_trials
 from .embedding import Embedding
+from .measures import DEFAULT_LAYER_ESTIMATOR
 from .network import estimate_edge, infer_multiplex
 from .parallel import thread_map
 from .selection import SkeletonSettings, select_parents
@@ -512,7 +513,7 @@ def _ksg_seconds(data, embeddings, target, settings, cheap):
     return per_estimate * evaluations
 
 
-def _edge_seconds(data, skeletons, n_resamples):
+def _edge_seconds(data, skeletons, n_resamples, estimator):
     """
     Measured seconds per edge of layer estimation at `n_resamples`, from one pilot parent.
     """
@@ -522,7 +523,7 @@ def _edge_seconds(data, skeletons, n_resamples):
             w = base + [v for v in sk.sources if v[0] != p]
             trial = 50
             start = time.perf_counter()
-            estimate_edge(data, sk.target, sk.source_variables(p), w, "miller_madow", trial, trial, prng=0)
+            estimate_edge(data, sk.target, sk.source_variables(p), w, estimator, trial, trial, prng=0)
             return (time.perf_counter() - start) * n_resamples / trial
     return 0.0
 
@@ -719,7 +720,9 @@ def infer(
         "prescreen": cheap["prescreen"],
         "parents_per_target": parents,
         "shared_per_target": shared,
-        "edge_seconds": _edge_seconds(discrete, pilot_skeletons, n_resamples),
+        "edge_seconds": _edge_seconds(
+            discrete, pilot_skeletons, n_resamples, pinned_infer.get("estimator", DEFAULT_LAYER_ESTIMATOR)
+        ),
     }
     # Preprocessing, the linearity test, and the pilot are already spent.
     elapsed = time.perf_counter() - started

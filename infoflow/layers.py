@@ -34,6 +34,7 @@ from dit.inference._symbols import as_generator
 from .context import apply_merge, merge_contexts_statistical
 from .crossfit import crossfit_flows
 from .measures import (
+    DEFAULT_LAYER_ESTIMATOR,
     EdgeFlow,
     _degrade,
     cmi_from_joint,
@@ -141,7 +142,7 @@ def layer_statistics(
     n_null=100,
     confidence=0.95,
     mean_block_length=None,
-    estimator="miller_madow",
+    estimator=DEFAULT_LAYER_ESTIMATOR,
     merge=True,
     merge_alpha=0.01,
     gap=0,

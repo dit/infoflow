@@ -33,6 +33,10 @@ __all__ = (
 
 _LOG2 = np.log(2)
 
+#: Estimator of the flow layers unless one is given: least layer error for its cost in
+#: ``validation/dit_estimators.py`` and ``validation/new_defaults.py`` :cite:`Chao2013`.
+DEFAULT_LAYER_ESTIMATOR = "chao_wang_jost"
+
 
 def dense_codes(values):
     """

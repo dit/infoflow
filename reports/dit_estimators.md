@@ -131,6 +131,14 @@ edges there either way (recall 0.001) and its scores barely move.
 CWJ layers are a safe default: they improved every synthetic benchmark (most of all the
 intrinsic layer's recall) and changed nothing on NetSim or CausalRivers. Miller-Madow
 selection helps the synthetic networks but costs CausalRivers 0.06 AUROC, the one
-real-data benchmark with known structure, so it should stay an option rather than the
-default. Making either a default changes existing results, so that is left as a
-separate decision.
+real-data benchmark with known structure, so it stays an option.
+
+**Adopted:** the layer estimator now defaults to CWJ
+(`measures.DEFAULT_LAYER_ESTIMATOR`, used by `infer_multiplex`, `estimate_edge`,
+`layer_statistics`, `crossfit_flows`, the channel layer and `auto`'s cost pilot); the
+selection statistic stays plug-in, and `compare_networks` still evaluates with
+Miller-Madow. On 40 pairs of independent AR(1) processes (23 edges tested), the false
+layers were 3 intrinsic, 5 synergistic and 5 shared with CWJ against 1, 5 and 13 with
+Miller-Madow, and 4 runs in each had a false intrinsic or synergistic layer; the
+uncoupled test now counts runs with any false flow (at most one of eight), since on one
+seed CWJ marks both layers of the edge that Miller-Madow marks once.

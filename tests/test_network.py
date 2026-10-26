@@ -76,7 +76,7 @@ def test_result_objects():
     assert ("a", "b", "intrinsic") in g.edges(keys=True)
     assert net.layer("intrinsic").has_edge("a", "b")
     assert "a" in net.summary()
-    assert net.settings["estimator"] == "miller_madow"
+    assert net.settings["estimator"] == "chao_wang_jost"
     te = ds["weight"].sel(layer="te").values
     parts = ds["weight"].sel(layer="intrinsic").values + ds["weight"].sel(layer="synergistic").values
     mask = np.isfinite(te)

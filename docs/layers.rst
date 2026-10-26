@@ -23,13 +23,15 @@ sampling noise. :func:`infoflow.crossfit.crossfit_flows` therefore separates the
 two in the style of double machine learning :cite:`Chernozhukov2018`: contexts are
 merged (exactly when their predictive distributions coincide, statistically
 otherwise, as CSSR merges histories :cite:`Shalizi2004`), the channel is fit on
-one fold and evaluated with the Miller--Madow estimator :cite:`Miller1955` on the
-other, and the folds are swapped and averaged.
+one fold and evaluated on the other with the Chao--Wang--Jost entropy estimator
+:cite:`Chao2013`, and the folds are swapped and averaged.
 
 ``infer_multiplex(estimator=...)`` (and :func:`~infoflow.crossfit.crossfit_flows`)
-also accepts dit's other discrete entropy estimators, applied to every entropy term
-of the evaluation table; the intrinsic flow is then evaluated at the channel hardened
-to its most likely output per context, since these estimators need integer counts.
+takes any of dit's discrete entropy estimators, applied to every entropy term of the
+evaluation table (``'miller_madow'`` :cite:`Miller1955` was the default before
+Chao--Wang--Jost). Except for the plug-in and Miller--Madow, the intrinsic flow is
+evaluated at the channel hardened to its most likely output per context, since these
+estimators need integer counts.
 On the sofic processes with exact flows (``validation/dit_estimators.py``; copy, XOR,
 shared, and mixed edges with up to 54 contexts, 20 replicates), the Chao--Wang--Jost
 estimator :cite:`Chao2013` lowered the cross-fitted layer RMSE against Miller--Madow
@@ -39,7 +41,13 @@ bits; NSB :cite:`Nemenman2002` was slightly more accurate still (0.030, 0.013) b
 costs thousands of times more per entropy. On real iEEG with the source shuffled
 (every true layer zero), Miller--Madow left 0.0010 bits of spurious synergy per edge,
 Chao--Wang--Jost 0.0004 and NSB 0.0002. Shrinkage, Laplace, Bonachela and the
-asymptotic NSB estimators were worse than Miller--Madow.
+asymptotic NSB estimators were worse than Miller--Madow. Against Miller--Madow
+layers, Chao--Wang--Jost raised the recall of significant intrinsic flow on random
+VAR, logistic-map and Lorenz-96 networks at unchanged precision and left NetSim and
+CausalRivers unchanged (``validation/new_defaults.py``; ``reports/dit_estimators.md``).
+It costs about 13 times as much per entropy as Miller--Madow; whole networks took
+about 1.5 times as long. :func:`~infoflow.compare.compare_networks` still evaluates
+with Miller--Madow.
 
 Statistics
 ----------

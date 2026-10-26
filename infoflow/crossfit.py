@@ -15,6 +15,7 @@ import numpy as np
 
 from .context import apply_merge, merge_contexts_statistical
 from .measures import (
+    DEFAULT_LAYER_ESTIMATOR,
     EdgeFlow,
     cmi_from_joint,
     dense_codes,
@@ -50,7 +51,7 @@ def crossfit_flows(
     y,
     x,
     w,
-    estimator="miller_madow",
+    estimator=DEFAULT_LAYER_ESTIMATOR,
     merge=True,
     merge_alpha=0.01,
     gap=0,
