@@ -187,7 +187,15 @@ test suite passes (281 passed, 2 skipped, plus the new `auto` tests).
    started within 80% of it select with the plug-in only (both recorded as downgrades),
    and the pilot takes the Gaussian time from the check when it has none. A target
    started just before a deadline still runs to completion, so a run can exceed its
-   budget by up to one target's selection. BUDGET_VERIFICATION
+   budget by up to one target's selection. On R1065J's 150 broadband epochs, a 2 h budget
+   had overrun by more than an hour before (stopped unfinished after 3.1 h, then 3.2 h
+   with only the round-based check); with the deadlines, the targets started after 80%
+   of the budget took about 10 s each with the plug-in, and the last Gaussian selection
+   that started before it finished at 1.9 h. With a deliberately infeasible 30 min
+   budget, every downgrade fired (three checks skipped, pre-screen on, all 18 targets
+   plug-in only) and the run took 97 min: about 16 min of preprocessing, which runs
+   before any budget logic, and checks already in flight at the deadline. A hard stop
+   would need cancellation inside `select_parents`.
 
 ## 5. Runtime
 
@@ -225,7 +233,10 @@ now mostly the pooled selection on 160-260 trials.
 2. Look at synergistic flow's p-values between 0.01 and 0.05 directly: the synergy
    estimate is a difference of two estimates, one from a numerical optimisation, and its
    permutation distribution may be lumpy.
-3. If directed flow is still of interest: longer windows (encoding plus the following
+3. Cooperative cancellation in `select_parents` (a deadline checked between permutation
+   batches), so `auto.infer` can stop in-flight selections instead of waiting for them,
+   and a budget check that counts preprocessing.
+4. If directed flow is still of interest: longer windows (encoding plus the following
    item), more subjects, or a pre-specified hypothesis (e.g. MTL to PFC at several lags)
    rather than all pairs.
 
