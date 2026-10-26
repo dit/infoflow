@@ -127,6 +127,13 @@ class SkeletonSettings:
     null standard deviation). Raw estimates are not comparable across targets, whose
     conditioning sets and plug-in biases differ; the z-scores are. With an ensemble,
     each source's score is the largest over the estimators.
+
+    ``entropy_estimator`` replaces the plug-in entropies inside the ``'plugin'``
+    estimator's conditional mutual information with any of dit's discrete entropy
+    estimators (:data:`dit.inference.estimators.ENTROPY_ESTIMATORS`, e.g.
+    ``'miller_madow'``, ``'zhang'``, ``'chao_wang_jost'``, ``'shrink'``); joint terms
+    get the product of their variables' alphabet sizes. The permutation tests stay valid
+    for any statistic; the estimator only changes their power.
     """
 
     n_perm_max_stat: int = 200
@@ -173,6 +180,7 @@ class SkeletonSettings:
     n_perm_prescreen: int = 100
     edge_scores: bool = False
     n_perm_scores: int = 20
+    entropy_estimator: str = "plugin"
     device: str | None = None
 
     def check(self):
@@ -249,21 +257,33 @@ def _combine(a, Ka, b, Kb):
     return a * Kb + b, Ka * Kb
 
 
-def _entropy(code, K):
+def _entropy(code, K, estimator="plugin"):
+    """
+    Entropy in nats of integer codes with `K` possible values.
+    """
     counts = np.bincount(code, minlength=0) if K <= 10_000_000 else np.unique(code, return_counts=True)[1]
     counts = counts[counts > 0].astype(float)
     n = counts.sum()
-    return float(np.log(n) - np.sum(counts * np.log(counts)) / n)
+    if estimator == "plugin":
+        return float(np.log(n) - np.sum(counts * np.log(counts)) / n)
+    from dit.inference.estimators import ENTROPY_ESTIMATORS
+
+    return float(ENTROPY_ESTIMATORS[estimator](counts, n, K))
 
 
-def _cmi(y, Ky, c, Kc, z, Kz):
+def _cmi(y, Ky, c, Kc, z, Kz, estimator="plugin"):
     """
-    Plug-in I[y : c | z] in bits from integer codes.
+    I[y : c | z] in bits from integer codes, with the plug-in or a dit entropy estimator.
     """
     cz, Kcz = _combine(c, Kc, z, Kz)
     yz, Kyz = _combine(y, Ky, z, Kz)
     ycz, Kycz = _combine(y, Ky, cz, Kcz)
-    value = _entropy(cz, Kcz) + _entropy(yz, Kyz) - _entropy(ycz, Kycz) - _entropy(z, Kz)
+    value = (
+        _entropy(cz, Kcz, estimator)
+        + _entropy(yz, Kyz, estimator)
+        - _entropy(ycz, Kycz, estimator)
+        - _entropy(z, Kz, estimator)
+    )
     return max(value, 0.0) / np.log(2)
 
 
@@ -271,6 +291,8 @@ class _Columns:
     """
     Integer columns of one target's realizations, with joint encodings.
     """
+
+    entropy_estimator = "plugin"
 
     def __init__(self, data, target, variables, max_lag):
         self.r = realizations(data, target, variables, max_lag=max_lag)
@@ -301,15 +323,15 @@ class _Columns:
 
     def cmi(self, c, Kc, z, Kz):
         """
-        Plug-in :math:`I[Y : c \\mid z]` in bits.
+        :math:`I[Y : c \\mid z]` in bits (plug-in unless :attr:`entropy_estimator` is set).
         """
-        return _cmi(self.y, self.Ky, c, Kc, z, Kz)
+        return _cmi(self.y, self.Ky, c, Kc, z, Kz, self.entropy_estimator)
 
     def cmi_batch(self, c, Kc, z, Kz, idx):
         """
         :meth:`cmi` of ``c[i]`` for every permutation ``i`` in `idx`, batched on :attr:`device` if set.
         """
-        if self.device is not None:
+        if self.device is not None and self.entropy_estimator == "plugin":
             from .backend import plugin_cmi_batch
 
             return plugin_cmi_batch(self.y, self.Ky, np.asarray(c)[np.asarray(idx)], Kc, z, Kz, self.device)
@@ -1255,6 +1277,7 @@ def _make_columns(name, data, target, everything, max_lag, settings, rng):
         cols = _CoarseColumns(data, target, everything, max_lag, min_cell=settings.coarse_min_cell)
     else:
         cols = _Columns(data, target, everything, max_lag)
+        cols.entropy_estimator = settings.entropy_estimator
     if settings.device is not None:
         from .backend import resolve_device
 

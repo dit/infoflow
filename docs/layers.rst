@@ -26,6 +26,21 @@ otherwise, as CSSR merges histories :cite:`Shalizi2004`), the channel is fit on
 one fold and evaluated with the Miller--Madow estimator :cite:`Miller1955` on the
 other, and the folds are swapped and averaged.
 
+``infer_multiplex(estimator=...)`` (and :func:`~infoflow.crossfit.crossfit_flows`)
+also accepts dit's other discrete entropy estimators, applied to every entropy term
+of the evaluation table; the intrinsic flow is then evaluated at the channel hardened
+to its most likely output per context, since these estimators need integer counts.
+On the sofic processes with exact flows (``validation/dit_estimators.py``; copy, XOR,
+shared, and mixed edges with up to 54 contexts, 20 replicates), the Chao--Wang--Jost
+estimator :cite:`Chao2013` lowered the cross-fitted layer RMSE against Miller--Madow
+from 0.047 to 0.035 bits at 300 samples and from 0.019 to 0.014 at 1000 (0.007 for
+both at 3000), and the synergistic layer's bias at 54 contexts from 0.081 to 0.033
+bits; NSB :cite:`Nemenman2002` was slightly more accurate still (0.030, 0.013) but
+costs thousands of times more per entropy. On real iEEG with the source shuffled
+(every true layer zero), Miller--Madow left 0.0010 bits of spurious synergy per edge,
+Chao--Wang--Jost 0.0004 and NSB 0.0002. Shrinkage, Laplace, Bonachela and the
+asymptotic NSB estimators were worse than Miller--Madow.
+
 Statistics
 ----------
 

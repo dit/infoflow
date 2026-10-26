@@ -724,8 +724,8 @@ wheels = [
 
 [[package]]
 name = "dit"
-version = "2.4.dev3+g42f1a9d6c"
-source = { git = "https://github.com/dit/dit?branch=main#42f1a9d6c0fe0337454ffd04696e122cd046718b" }
+version = "2.4.dev41+ge3611818a"
+source = { git = "https://github.com/dit/dit?branch=main#e3611818a5eed2187ee91183e1bd03306b7074fa" }
 dependencies = [
     { name = "boltons" },
     { name = "debtcollector" },

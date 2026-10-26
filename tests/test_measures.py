@@ -118,6 +118,29 @@ def test_edge_flows_single_joint():
     assert edge_flows(y, x, None, prng=0).synergistic == pytest.approx(0, abs=1e-9)
 
 
+DIT_ESTIMATORS = [
+    e for e in ("grassberger", "chao_shen", "zhang", "chao_wang_jost", "shrink", "jackknife")
+    if e in __import__("dit.inference.estimators", fromlist=["ENTROPY_ESTIMATORS"]).ENTROPY_ESTIMATORS
+]  # fmt: skip
+
+
+@pytest.mark.parametrize("estimator", DIT_ESTIMATORS)
+def test_dit_estimators_in_layers(estimator):
+    from dit.inference import conditional_mutual_information
+
+    rng = np.random.default_rng(4)
+    y, x, w = rng.integers(0, 2, 500), rng.integers(0, 3, 500), rng.integers(0, 4, 500)
+    table = np.zeros((2, 3, 4))
+    np.add.at(table, (y, x, w), 1.0)
+    expected = conditional_mutual_information(y, x, w, estimator=estimator, alphabet_sizes=(2, 3, 4))
+    assert cmi_from_joint(table, estimator) == pytest.approx(expected, abs=1e-9)
+    flow = edge_flows(*_samples("copy", 2000, np.random.default_rng(5)), estimator=estimator, prng=0)
+    assert flow.te == pytest.approx(flow.intrinsic + flow.synergistic)
+    assert flow.tdmi == pytest.approx(flow.intrinsic + flow.shared)
+    crossfit = crossfit_flows(*_samples("copy", 2000, np.random.default_rng(5)), estimator=estimator, prng=0)
+    assert crossfit.intrinsic > 0.3 and crossfit.synergistic < 0.05
+
+
 def test_intrinsic_flow_guards_oversized_channels():
     p = np.random.default_rng(0).random((2, 3, 40))
     te, tdmi = cmi_from_joint(p), cmi_from_joint(p.sum(axis=2, keepdims=True))

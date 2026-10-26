@@ -310,8 +310,10 @@ def infer_multiplex(
     preprocess : 'auto', dict, or None
         ``'auto'`` preprocesses float data with :func:`~infoflow.preprocess.preprocess`;
         a dict passes options to it; None treats values as symbols.
-    estimator : {'miller_madow', 'plugin'}
-        Evaluation estimator for the flow layers.
+    estimator : str
+        Evaluation estimator for the flow layers: ``'miller_madow'``, ``'plugin'``, or
+        another of dit's discrete entropy estimators (e.g. ``'chao_wang_jost'``; see
+        :func:`~infoflow.measures.cmi_from_joint`).
     alpha : float
         FDR level for the layer tests.
     fdr_dependent : bool

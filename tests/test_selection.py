@@ -38,6 +38,22 @@ def test_chain_recovers_parents_and_lags():
     assert result[2].parents() == [1] and result[2].sources == [(1, 2)]
 
 
+@pytest.mark.parametrize("estimator", ["miller_madow", "grassberger", "chao_shen"])
+def test_entropy_estimator_in_selection(estimator):
+    from dit.inference import conditional_mutual_information
+
+    from infoflow.selection import _cmi
+
+    rng = np.random.default_rng(1)
+    y, c, z = rng.integers(0, 2, 800), rng.integers(0, 3, 800), rng.integers(0, 4, 800)
+    expected = conditional_mutual_information(y, c, z, estimator=estimator, alphabet_sizes=(2, 3, 4))
+    assert _cmi(y, 2, c, 3, z, 4, estimator) == pytest.approx(max(expected, 0.0), abs=1e-9)
+    data = DiscreteData.from_discrete(_chain(3000, np.random.default_rng(0)))
+    settings = SkeletonSettings(**FAST, entropy_estimator=estimator)
+    result = infer_skeleton(data, Embedding(max_lag=3), settings=settings, prng=0)
+    assert [result[t].parents() for t in range(3)] == [[], [0], [1]]
+
+
 def test_xor_needs_pair_search():
     rng = np.random.default_rng(1)
     n = 3000

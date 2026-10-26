@@ -25,6 +25,18 @@ shuffles when there are trials, otherwise circular, block, or local permutations
 Selection and estimation can use disjoint halves of the data (``holdout``) to
 avoid post-selection bias in the layer estimates.
 
+``SkeletonSettings(entropy_estimator=...)`` computes the plug-in estimator's
+conditional mutual information with any of dit's discrete entropy estimators instead.
+The permutation tests stay valid; only their power changes. On random VAR and
+coupled-logistic networks (``validation/dit_estimators_selection.py``; 10 nodes, 500
+and 2000 samples, five networks each, the same networks for every estimator),
+Miller--Madow raised recall by 0.05 over the plug-in on both kinds (better on 7 of
+10 networks, worse on none) at the same cost and without more false positives on
+VAR; Chao--Wang--Jost :cite:`Chao2013` raised it most (0.06 on VAR, 0.13 on
+logistic maps) at two to nine times the cost, with 0.4 more false positives per
+logistic network and a lower edge-score AUROC; Zhang :cite:`Zhang2012` matched
+Miller--Madow at two to eight times the cost.
+
 For continuous data, ``SkeletonSettings(estimator="ksg")`` selects parents with the
 KSG conditional mutual information on the raw values :cite:`Kraskov2004,Frenzel2007`,
 as IDTxl does. Conditioning on a parent continuously removes its influence where bins
