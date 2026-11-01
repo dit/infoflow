@@ -33,6 +33,10 @@ __all__ = (
 
 _LOG2 = np.log(2)
 
+#: Estimator of the flow layers unless one is given: least layer error for its cost in
+#: ``validation/dit_estimators.py`` and ``validation/new_defaults.py`` :cite:`Chao2013`.
+DEFAULT_LAYER_ESTIMATOR = "chao_wang_jost"
+
 
 def dense_codes(values):
     """
@@ -68,6 +72,21 @@ def _entropy_terms(q):
     return float(-np.sum(q * np.log(q)))
 
 
+def _dit_entropy(counts, estimator, K):
+    """
+    Entropy in bits of a count array with a dit estimator and `K` possible outcomes.
+    """
+    from dit.inference.estimators import ENTROPY_ESTIMATORS
+
+    if estimator not in ENTROPY_ESTIMATORS:
+        raise ValueError(f"Unknown estimator {estimator!r}; choose from {sorted(ENTROPY_ESTIMATORS)}.")
+    counts = counts[counts > 0]
+    if len(counts) <= 1:
+        # One observed outcome (e.g. a context with a single value); some estimators reject it.
+        return 0.0
+    return float(ENTROPY_ESTIMATORS[estimator](counts, counts.sum(), K)) / _LOG2
+
+
 def cmi_from_joint(p, estimator="plugin", n=None):
     """
     :math:`I[Y : X \\mid W]` in bits from a table ``p[y, x, w]`` (counts or probabilities).
@@ -77,10 +96,14 @@ def cmi_from_joint(p, estimator="plugin", n=None):
     p : np.ndarray
         Joint table over (y, x, w). With a single context value this is
         :math:`I[Y : X]`.
-    estimator : {'plugin', 'miller_madow'}
-        ``'miller_madow'`` adds each entropy term's :math:`(K - 1) / 2N` bias
-        correction :cite:`Miller1955`, with :math:`K` the number of occupied
-        cells. It needs the sample size `n` (taken from ``p.sum()`` for counts).
+    estimator : str
+        ``'plugin'``; ``'miller_madow'``, which adds each entropy term's
+        :math:`(K - 1) / 2N` bias correction :cite:`Miller1955`, with :math:`K` the
+        number of occupied cells (it needs the sample size `n`, taken from ``p.sum()``
+        for counts); or any other of dit's discrete entropy estimators
+        (:data:`dit.inference.estimators.ENTROPY_ESTIMATORS`), applied to each entropy
+        term of the count table with the product of its axes' sizes as the alphabet.
+        Those need integer counts: pass counts, or probabilities with `n`.
     n : float, None
         The number of samples behind a probability table.
     """
@@ -88,15 +111,35 @@ def cmi_from_joint(p, estimator="plugin", n=None):
     if total <= 0:
         return 0.0
     n = total if n is None else n
+    if estimator not in ("plugin", "miller_madow"):
+        c = np.rint(p * (n / total))
+        Ky, Kx, Kw = p.shape
+        return (
+            _dit_entropy(c.sum(axis=0).ravel(), estimator, Kx * Kw)
+            + _dit_entropy(c.sum(axis=1).ravel(), estimator, Ky * Kw)
+            - _dit_entropy(c.ravel(), estimator, Ky * Kx * Kw)
+            - _dit_entropy(c.sum(axis=(0, 1)), estimator, Kw)
+        )
     q = p / total
     q_xw, q_yw, q_w = q.sum(axis=0), q.sum(axis=1), q.sum(axis=(0, 1))
     value = _entropy_terms(q_xw) + _entropy_terms(q_yw) - _entropy_terms(q) - _entropy_terms(q_w)
     if estimator == "miller_madow":
         k = lambda a: np.count_nonzero(a > 1e-12)  # noqa: E731
         value += ((k(q_xw) - 1) + (k(q_yw) - 1) - (k(q) - 1) - (k(q_w) - 1)) / (2 * n)
-    elif estimator != "plugin":
-        raise ValueError(f"Unknown estimator {estimator!r}; use 'plugin' or 'miller_madow'.")
     return value / _LOG2
+
+
+def evaluation_table(table, Q, estimator):
+    """
+    The table on which `estimator` evaluates the intrinsic flow at channel `Q`.
+
+    Plug-in and Miller--Madow evaluate the degraded table itself; dit's other
+    estimators need integer counts, so the channel is hardened to its most likely
+    output per context (the minimizing channel is usually close to deterministic).
+    """
+    if estimator in ("plugin", "miller_madow"):
+        return _degrade(table, Q)
+    return _degrade(table, np.eye(Q.shape[1])[Q.argmax(axis=1)])
 
 
 def _degrade(p, Q):
@@ -268,8 +311,10 @@ def edge_flows(y, x, w, estimator="plugin", bound=None, restarts=3, prng=None):
         The source's past (1D codes or a 2D array whose rows are joint values).
     w : array_like or None
         The context (1D codes or 2D rows); None for an empty context.
-    estimator : {'plugin', 'miller_madow'}
-        Applied to TE, TDMI, and the intrinsic flow at the minimizing channel.
+    estimator : str
+        ``'plugin'``, ``'miller_madow'``, or another of dit's discrete entropy
+        estimators (:func:`cmi_from_joint`), applied to TE, TDMI, and the intrinsic
+        flow at the minimizing channel (:func:`evaluation_table`).
     bound, restarts, prng
         Passed to :func:`intrinsic_flow`.
 
@@ -285,7 +330,7 @@ def edge_flows(y, x, w, estimator="plugin", bound=None, restarts=3, prng=None):
     iif_plugin, Q = intrinsic_flow(table, bound=bound, restarts=restarts, prng=prng)
     te = cmi_from_joint(table, estimator)
     tdmi = cmi_from_joint(table.sum(axis=2, keepdims=True), estimator)
-    iif = cmi_from_joint(_degrade(table, Q), estimator, n=n)
+    iif = cmi_from_joint(evaluation_table(table, Q, estimator), estimator, n=n)
     te, tdmi, iif, syn, shared, clipped = layers_from_values(te, tdmi, iif)
     raw = {
         "te": cmi_from_joint(table),

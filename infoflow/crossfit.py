@@ -15,10 +15,11 @@ import numpy as np
 
 from .context import apply_merge, merge_contexts_statistical
 from .measures import (
+    DEFAULT_LAYER_ESTIMATOR,
     EdgeFlow,
-    _degrade,
     cmi_from_joint,
     dense_codes,
+    evaluation_table,
     intrinsic_flow,
     joint_table,
     layers_from_values,
@@ -42,7 +43,7 @@ def _evaluate(table_b, mapping, Q, estimator):
     n = merged_b.sum()
     te = cmi_from_joint(table_b, estimator)
     tdmi = cmi_from_joint(table_b.sum(axis=2, keepdims=True), estimator)
-    iif = cmi_from_joint(_degrade(merged_b, Q), estimator, n=n)
+    iif = cmi_from_joint(evaluation_table(merged_b, Q, estimator), estimator, n=n)
     return te, tdmi, min(iif, te, tdmi)
 
 
@@ -50,7 +51,7 @@ def crossfit_flows(
     y,
     x,
     w,
-    estimator="miller_madow",
+    estimator=DEFAULT_LAYER_ESTIMATOR,
     merge=True,
     merge_alpha=0.01,
     gap=0,
@@ -66,8 +67,9 @@ def crossfit_flows(
     y, x, w : array_like
         The target present, source past, and context of each aligned realization
         (1D codes or 2D rows of joint values); `w` may be None.
-    estimator : {'miller_madow', 'plugin'}
-        The evaluation estimator on the held-out fold.
+    estimator : str
+        The evaluation estimator on the held-out fold (see
+        :func:`~infoflow.measures.cmi_from_joint`).
     merge : bool
         Merge statistically indistinguishable context values before fitting.
     merge_alpha : float

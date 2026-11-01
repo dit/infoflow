@@ -258,11 +258,11 @@ def conditional_mutual_information_test_knn(
     data = np.asarray(data, dtype=np.float64)
     x_cols, y_cols = (list(r) for r in rvs)
     crvs = [] if crvs is None else list(crvs)
-    value = total_correlation_ksg(data, [x_cols, y_cols], crvs, k=k, noise=noise, prng=rng)
+    value = total_correlation_ksg(data, [x_cols, y_cols], crvs, k=k, noise=noise, rng=rng)
     z = data[:, crvs]
     null = np.empty(n_surrogates)
     for i in range(n_surrogates):
         shuffled = data.copy()
         shuffled[:, x_cols] = _local_permutation(data[:, x_cols], z, k_perm, rng)
-        null[i] = total_correlation_ksg(shuffled, [x_cols, y_cols], crvs, k=k, noise=noise, prng=rng)
+        null[i] = total_correlation_ksg(shuffled, [x_cols, y_cols], crvs, k=k, noise=noise, rng=rng)
     return _result(value, null, len(data))

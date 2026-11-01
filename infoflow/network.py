@@ -13,6 +13,7 @@ from dit.inference._symbols import as_generator
 from .data import DiscreteData, realizations
 from .embedding import Embedding
 from .layers import BAYES_THRESHOLD, LAYERS, adjust_layer_pvalues, layer_statistics
+from .measures import DEFAULT_LAYER_ESTIMATOR
 from .selection import SkeletonSettings, _cmi, _Columns, infer_skeleton
 
 if TYPE_CHECKING:
@@ -181,7 +182,7 @@ def estimate_edge(
     target,
     x_vars,
     w_vars,
-    estimator="miller_madow",
+    estimator=DEFAULT_LAYER_ESTIMATOR,
     n_boot=100,
     n_null=100,
     prng=None,
@@ -261,7 +262,7 @@ def infer_multiplex(
     embeddings=None,
     max_lag=None,
     preprocess="auto",
-    estimator="miller_madow",
+    estimator=DEFAULT_LAYER_ESTIMATOR,
     alpha=0.05,
     fdr_dependent=False,
     n_boot=100,
@@ -310,8 +311,10 @@ def infer_multiplex(
     preprocess : 'auto', dict, or None
         ``'auto'`` preprocesses float data with :func:`~infoflow.preprocess.preprocess`;
         a dict passes options to it; None treats values as symbols.
-    estimator : {'miller_madow', 'plugin'}
-        Evaluation estimator for the flow layers.
+    estimator : str
+        Evaluation estimator for the flow layers: ``'miller_madow'``, ``'plugin'``, or
+        another of dit's discrete entropy estimators (e.g. ``'chao_wang_jost'``; see
+        :func:`~infoflow.measures.cmi_from_joint`).
     alpha : float
         FDR level for the layer tests.
     fdr_dependent : bool

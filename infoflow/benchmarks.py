@@ -137,7 +137,7 @@ def _estimate(x, y, z, estimator, kind, bins, k, rng):
 
         data = np.column_stack([x, y, z]).astype(float)
         crvs = list(range(2, data.shape[1])) or None
-        return float(total_correlation_ksg(data, [[0], [1]], crvs, k=k, prng=rng))
+        return float(total_correlation_ksg(data, [[0], [1]], crvs, k=k, rng=rng))
     if kind == "gaussian":
         x, y, z = _bin(x, bins), _bin(y, bins), _bin(z, bins) if z.shape[1] else z
     yc, _ = dense_codes(y)

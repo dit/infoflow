@@ -23,7 +23,7 @@ Measures
 
 * ``mi`` is :math:`I[X : Y]` at the observed input distribution: the information
   the edge carries as the source actually drives it. It uses the network's estimator
-  (Miller--Madow by default :cite:`Miller1955`), or
+  (Chao--Wang--Jost by default :cite:`Chao2013`), or
   ``ChannelSettings(estimator=...)``.
 * ``capacity`` is :math:`C = \max_{p(x)} I[X : Y]` of the estimated channel,
   computed by the Blahut--Arimoto algorithm :cite:`Blahut1972,Arimoto1972`

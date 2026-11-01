@@ -33,7 +33,17 @@ from dit.inference._symbols import as_generator
 
 from .context import apply_merge, merge_contexts_statistical
 from .crossfit import crossfit_flows
-from .measures import EdgeFlow, _degrade, cmi_from_joint, dense_codes, intrinsic_flow, joint_table, layers_from_values
+from .measures import (
+    DEFAULT_LAYER_ESTIMATOR,
+    EdgeFlow,
+    _degrade,
+    cmi_from_joint,
+    dense_codes,
+    evaluation_table,
+    intrinsic_flow,
+    joint_table,
+    layers_from_values,
+)
 
 __all__ = (
     "BAYES_OPTIONS",
@@ -90,7 +100,7 @@ def _layers_on_table(table, mapping, n_clusters, estimator, initial, prng):
     _, Q = intrinsic_flow(merged, initial=initial, prng=prng)
     te = cmi_from_joint(table, estimator)
     tdmi = cmi_from_joint(table.sum(axis=2, keepdims=True), estimator)
-    iif = min(cmi_from_joint(_degrade(merged, Q), estimator, n=n), te, tdmi)
+    iif = min(cmi_from_joint(evaluation_table(merged, Q, estimator), estimator, n=n), te, tdmi)
     te, tdmi, iif, syn, shared, _ = layers_from_values(te, tdmi, iif)
     return {"te": te, "tdmi": tdmi, "intrinsic": iif, "synergistic": syn, "shared": shared}
 
@@ -132,7 +142,7 @@ def layer_statistics(
     n_null=100,
     confidence=0.95,
     mean_block_length=None,
-    estimator="miller_madow",
+    estimator=DEFAULT_LAYER_ESTIMATOR,
     merge=True,
     merge_alpha=0.01,
     gap=0,

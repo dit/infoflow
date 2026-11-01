@@ -56,16 +56,15 @@ def test_uncoupled_false_positive_rate():
     """
     Independent autocorrelated processes: almost no significant flow in any layer.
     """
-    false = 0
-    runs = 8
-    for seed in range(runs):
+    runs_with_false_flow = 0
+    for seed in range(8):
         rng = np.random.default_rng(seed)
         x = np.zeros((1500, 2))
         for t in range(1, 1500):
             x[t] = 0.8 * x[t - 1] + rng.normal(size=2)
         net = infer_multiplex(x, skeleton_settings=FAST, n_boot=40, n_null=40, prng=seed)
-        false += int(_sig(net, "intrinsic").sum() + _sig(net, "synergistic").sum())
-    assert false <= 1
+        runs_with_false_flow += int(_sig(net, "intrinsic").sum() + _sig(net, "synergistic").sum() > 0)
+    assert runs_with_false_flow <= 1
 
 
 def test_discrete_sofic_generator_matches_exact_and_delay():

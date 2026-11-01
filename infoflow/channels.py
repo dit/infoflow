@@ -26,7 +26,7 @@ import numpy as np
 import xarray as xr
 
 from .machines import _aligned, _as_data
-from .measures import cmi_from_joint
+from .measures import DEFAULT_LAYER_ESTIMATOR, cmi_from_joint
 
 __all__ = ("ChannelLayer", "ChannelSettings", "edge_channel", "infer_channels")
 
@@ -38,7 +38,7 @@ class ChannelSettings:
 
     Attributes
     ----------
-    estimator : {'miller_madow', 'plugin'}, None
+    estimator : str, None
         Estimator of the mutual information (None: the network's). The capacity is
         always the plug-in capacity of the estimated channel.
     include_shared_candidates : bool
@@ -151,7 +151,7 @@ def infer_channels(data, network, settings=None):
         settings = ChannelSettings()
     elif isinstance(settings, dict):
         settings = ChannelSettings(**settings)
-    estimator = settings.estimator or network.settings.get("estimator", "miller_madow")
+    estimator = settings.estimator or network.settings.get("estimator", DEFAULT_LAYER_ESTIMATOR)
     names = network.names
     data = _as_data(data, names)
     P = data.n_processes
