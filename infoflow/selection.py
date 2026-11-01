@@ -266,6 +266,8 @@ def _entropy(code, K, estimator="plugin"):
     n = counts.sum()
     if estimator == "plugin":
         return float(np.log(n) - np.sum(counts * np.log(counts)) / n)
+    if len(counts) <= 1:
+        return 0.0
     from dit.inference.estimators import ENTROPY_ESTIMATORS
 
     return float(ENTROPY_ESTIMATORS[estimator](counts, n, K))

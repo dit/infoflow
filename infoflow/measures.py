@@ -81,8 +81,10 @@ def _dit_entropy(counts, estimator, K):
     if estimator not in ENTROPY_ESTIMATORS:
         raise ValueError(f"Unknown estimator {estimator!r}; choose from {sorted(ENTROPY_ESTIMATORS)}.")
     counts = counts[counts > 0]
-    n = counts.sum()
-    return float(ENTROPY_ESTIMATORS[estimator](counts, n, K)) / _LOG2 if n > 0 else 0.0
+    if len(counts) <= 1:
+        # One observed outcome (e.g. a context with a single value); some estimators reject it.
+        return 0.0
+    return float(ENTROPY_ESTIMATORS[estimator](counts, counts.sum(), K)) / _LOG2
 
 
 def cmi_from_joint(p, estimator="plugin", n=None):

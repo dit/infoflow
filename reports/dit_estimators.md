@@ -126,6 +126,65 @@ selection change: Miller-Madow selection alone gives the same 0.525, CWJ layers 
 give exactly the current results. NetSim is unchanged because `auto` finds almost no
 edges there either way (recall 0.001) and its scores barely move.
 
+## 5. dit's second batch (dit PR #305)
+
+Six more discrete estimators (Panzeri-Treves, quadratic extrapolation, Wu-Yang, BUB,
+unseen, PYM) and a Gaussian-copula mutual information, against the current defaults
+(CWJ layers, plug-in selection). None is a clear improvement.
+
+**Cost per CMI** (2000 samples, 1024 cells): Panzeri-Treves 1.1 ms, Wu-Yang 2.3,
+quadratic extrapolation 3.5, BUB 7.6, unseen 20, PYM 42 (CWJ 0.5, plug-in 0.03).
+
+**Layers** (section 1's exact-flow screen, cross-fitted RMSE in bits at 300 / 1000 / 3000
+samples; "better cells": of the 48 process x size x context cells, how many beat CWJ):
+
+| Estimator | RMSE | Better cells | catFR synergy bias (section 3) |
+|---|---|---|---|
+| chao_wang_jost (default) | 0.035 / 0.014 / 0.007 | | 0.0004 |
+| panzeri_treves | 0.028 / 0.013 / 0.007 | 19 / 48 | 0.0006 |
+| nsb | 0.030 / 0.013 / 0.007 | 22 / 48 | 0.0002 |
+| quadratic_extrapolation | 0.048 / 0.015 / 0.007 | 18 / 48 | 0.0002 |
+| wu_yang | 0.039 / 0.015 / 0.007 | | 0.0012 |
+| pym | 0.042 / 0.016 / 0.008 | 12 / 48 | 0.0000, but real TE 0.0002 |
+| bub | 0.052 / 0.018 / 0.007 | | 0.0010 |
+| unseen | 0.079 / 0.046 / 0.036 | | 0.0000, but real TE 0.0000 |
+
+Panzeri-Treves has the lowest mean RMSE, from the smallest, most context-heavy settings
+(its synergy bias at 54 contexts and 300 samples is 0.019 bits against CWJ's 0.057), but
+it is worse than CWJ in most cells and on the catFR bias probe. Quadratic extrapolation
+matches NSB on catFR but is worse than CWJ on the synthetic processes. Unseen and PYM
+remove the bias by suppressing the flow itself: on the catFR data their transfer entropy
+is 0.0000 and 0.0002 bits against CWJ's 0.0011, and they add bias to shared flow.
+
+**Selection** (section 2's networks, paired against the plug-in over 10 networks):
+
+| Estimator | VAR recall | VAR precision | VAR AUROC | Logistic recall | Logistic AUROC | Runtime vs plug-in |
+|---|---|---|---|---|---|---|
+| panzeri_treves | 0.23 -> 0.32 (10/0) | 0.71 -> 0.86 | 0.79 -> 0.77 (3/7) | 0.34 -> 0.47 (9/0) | 0.87 -> 0.83 (2/8) | 12x, 120x |
+| wu_yang | 0.23 -> 0.29 (7/0) | 0.71 -> 0.76 | 0.79 -> 0.73 (2/8) | 0.34 -> 0.43 (7/1) | 0.87 -> 0.81 (2/8) | 1.1x, 2.2x |
+
+Both find more edges with a worse edge-score ranking, the trade-off CWJ selection showed;
+Panzeri-Treves is the strongest selection statistic tested but far too slow, and neither
+was run on CausalRivers, where a recall-raising selection statistic (Miller-Madow) cost
+0.06 AUROC.
+
+**Gaussian copula.** Copula-normalizing the data before `auto.infer` turns its
+linear-Gaussian selection estimator into the Gaussian-copula one :cite:`Ince2017`:
+
+| Benchmark | AUROC raw -> copula |
+|---|---|
+| VAR, 500 / 2000 | 0.946 -> 0.948 (3/2), 0.995 -> 0.995 (2/2) |
+| Logistic maps, 500 / 2000 | 0.712 -> 0.648 (0/5), 0.970 -> 0.972 (3/2) |
+| Lorenz-96, 1000 | 0.936 -> 0.936 (no change) |
+| NetSim, 20 subjects | 0.625 -> 0.618 (6/13) |
+| CausalRivers, 20 graphs | 0.581 -> 0.606 (8/4) |
+
+It helps CausalRivers and hurts NetSim and short logistic series, so it is not a default
+either; `copula_normalize` before `auto.infer` stays a user option for river-like data.
+
+`dit` also renamed `prng` to `rng` (PR #306); `total_correlation_ksg` no longer accepts
+the old name despite the deprecation alias, so infoflow now passes `rng`.
+
 ## Recommendation
 
 CWJ layers are a safe default: they improved every synthetic benchmark (most of all the

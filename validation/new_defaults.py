@@ -11,7 +11,12 @@ Each benchmark runs both with the same seeds and data:
   coupled-logistic and Lorenz-96 networks (``infer_multiplex``);
 * ``motifs``: :func:`~infoflow.benchmarks.motif_validation` (layers and roles);
 * ``netsim``, ``rivers``: ``auto.infer`` (fast preset) on NetSim and CausalRivers, as
-  ``validation/external.py`` does.
+  ``validation/external.py`` does;
+* ``auto_synthetic``: ``auto.infer`` on the ``synthetic`` graphs and simulations.
+
+``--selection``/``--layers`` pick any estimators instead of a named ``--config``, and
+``--copula`` copula-normalizes the data before ``auto.infer`` (which turns its
+linear-Gaussian selection estimator into the Gaussian-copula one :cite:`Ince2017`).
 
     python validation/new_defaults.py synthetic --kind lorenz96 --config proposed --out-dir results/
 """
@@ -31,39 +36,88 @@ CONFIGS = {
 }
 
 
-def infer_kwargs(config):
+def infer_kwargs(c):
     from infoflow.selection import SkeletonSettings
 
-    c = CONFIGS[config]
     return {"skeleton_settings": SkeletonSettings(entropy_estimator=c["selection"]), "estimator": c["layers"]}
 
 
-def synthetic(kind, config, reps, seed):
+def synthetic(kind, c, reps, seed):
     from infoflow.benchmarks import network_validation
 
     samples = (1000,) if kind == "lorenz96" else (500, 2000)
     return network_validation(
         kind=kind, n_nodes=(10,), n_samples=samples, n_reps=reps, max_lag=3,
-        levels=("skeleton", "intrinsic"), infer_kwargs=infer_kwargs(config), prng=seed,
+        levels=("skeleton", "intrinsic"), infer_kwargs=infer_kwargs(c), prng=seed,
     )  # fmt: skip
 
 
-def motifs(config, reps, seed):
+def motifs(c, reps, seed):
     from infoflow.benchmarks import motif_validation
 
-    return motif_validation(n_samples=3000, n_reps=reps, infer_kwargs=infer_kwargs(config), prng=seed)
+    return motif_validation(n_samples=3000, n_reps=reps, infer_kwargs=infer_kwargs(c), prng=seed)
 
 
-def external(bench, config, data_dir, seed, sims, subjects, sizes, graphs):
+def run_auto(data, c, seed, **kwargs):
+    from dit.inference import copula_normalize
+
+    from infoflow import auto
+
+    if c.get("copula"):
+        data = copula_normalize(data)
+    return auto.infer(
+        data, preset="fast", edge_scores=True, entropy_estimator=c["selection"], layer_estimator=c["layers"],
+        prng=seed, **kwargs,
+    ).network  # fmt: skip
+
+
+def auto_synthetic(kind, c, reps, seed):
+    """
+    ``auto.infer`` on the graphs and simulations ``network_validation`` would draw.
+    """
+    from infoflow.benchmarks import (
+        METRICS,
+        lorenz96_graph,
+        random_network,
+        score_network,
+        simulate_network,
+    )  # fmt: skip
+    from infoflow.datasets import lorenz96
+
+    rng = np.random.default_rng(seed)
+    samples = (1000,) if kind == "lorenz96" else (500, 2000)
+    levels = ("skeleton", "intrinsic")
+    values = {m: np.full((len(levels), len(samples), reps), np.nan) for m in METRICS}
+    for j, T in enumerate(samples):
+        for r in range(reps):
+            if kind == "lorenz96":
+                graph, data = lorenz96_graph(10), lorenz96(T, n_vars=10, seed=int(rng.integers(2**32)))
+            else:
+                graph = random_network(10, 3.0, 3, rng)
+                data = simulate_network(graph, T, kind, prng=rng)
+            t0 = time.perf_counter()
+            net = run_auto(data, c, int(rng.integers(2**32)), max_lag=3)
+            scores = score_network(net, graph, levels)
+            for li, level in enumerate(levels):
+                for m in METRICS[:-1]:
+                    values[m][li, j, r] = scores[level][m]
+                values["runtime"][li, j, r] = time.perf_counter() - t0
+            print(kind, T, r, round(scores["skeleton"]["auroc"], 3), flush=True)
+    dims = ("level", "n_samples", "rep")
+    return xr.Dataset(
+        {m: (dims, v) for m, v in values.items()},
+        coords={"level": list(levels), "n_samples": list(samples), "rep": range(reps)},
+    )
+
+
+def external(bench, c, data_dir, seed, sims, subjects, sizes, graphs):
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from external import METRICS, netsim_instances, rivers_instances, undirected_auroc
 
-    from infoflow import auto
     from infoflow.benchmarks import score_edges
 
-    c = CONFIGS[config]
     if bench == "netsim":
         instances = netsim_instances(data_dir, sims, subjects)
     else:
@@ -73,10 +127,7 @@ def external(bench, config, data_dir, seed, sims, subjects, sizes, graphs):
     for label, data, truth in instances:
         s = int(rng.integers(2**32))
         t0 = time.perf_counter()
-        net = auto.infer(
-            data, preset="fast", edge_scores=True, entropy_estimator=c["selection"], layer_estimator=c["layers"],
-            prng=s,
-        ).network  # fmt: skip
+        net = run_auto(data, c, s)
         elapsed = time.perf_counter() - t0
         found = {(p, t) for t, sk in net.skeleton.items() if sk.significant for p in sk.parents()}
         score = net.dataset["score"].values
@@ -90,8 +141,12 @@ def external(bench, config, data_dir, seed, sims, subjects, sizes, graphs):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("bench", choices=("synthetic", "motifs", "netsim", "rivers"))
-    parser.add_argument("--config", choices=tuple(CONFIGS), required=True)
+    parser.add_argument("bench", choices=("synthetic", "auto_synthetic", "motifs", "netsim", "rivers"))
+    parser.add_argument("--config", choices=tuple(CONFIGS), default=None)
+    parser.add_argument("--selection", default="plugin", help="selection entropy estimator (without --config)")
+    parser.add_argument("--layers", default="chao_wang_jost", help="layer estimator (without --config)")
+    parser.add_argument("--copula", action="store_true", help="copula-normalize the data before auto.infer")
+    parser.add_argument("--label", default=None)
     parser.add_argument("--kind", choices=("var", "logistic", "lorenz96"), default="var")
     parser.add_argument("--reps", type=int, default=5)
     parser.add_argument("--data", default=None)
@@ -103,16 +158,22 @@ def main():
     parser.add_argument("--out-dir", default=".")
     args = parser.parse_args()
 
+    c = dict(CONFIGS[args.config]) if args.config else {"selection": args.selection, "layers": args.layers}
+    c["copula"] = args.copula
+    label = args.label or args.config or f"{c['selection']}-{c['layers']}{'-copula' if args.copula else ''}"
+
     start = time.perf_counter()
     if args.bench == "synthetic":
-        ds, name = synthetic(args.kind, args.config, args.reps, args.seed), f"synthetic_{args.kind}"
+        ds, name = synthetic(args.kind, c, args.reps, args.seed), f"synthetic_{args.kind}"
+    elif args.bench == "auto_synthetic":
+        ds, name = auto_synthetic(args.kind, c, args.reps, args.seed), f"auto_synthetic_{args.kind}"
     elif args.bench == "motifs":
-        ds, name = motifs(args.config, args.reps, args.seed), "motifs"
+        ds, name = motifs(c, args.reps, args.seed), "motifs"
     else:
-        ds = external(args.bench, args.config, args.data, args.seed, args.sims, args.subjects, args.sizes, args.graphs)
+        ds = external(args.bench, c, args.data, args.seed, args.sims, args.subjects, args.sizes, args.graphs)
         name = args.bench
     ds.attrs["seconds"] = time.perf_counter() - start
-    out = Path(args.out_dir) / f"{name}_{args.config}.nc"
+    out = Path(args.out_dir) / f"{name}_{label}.nc"
     ds.to_netcdf(out)
     print(out, round(ds.attrs["seconds"]), "s", flush=True)
 

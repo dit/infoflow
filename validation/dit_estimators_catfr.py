@@ -41,7 +41,7 @@ SELECTION_ESTIMATORS = ("plugin", "miller_madow", "grassberger", "zhang", "chao_
 LAYERS = ("te", "intrinsic", "synergistic", "shared")
 
 
-def bias(cohort_dir, out):
+def bias(cohort_dir, out, estimators=LAYER_ESTIMATORS):
     import os
 
     os.environ["CATFR_OUT"] = str(cohort_dir)
@@ -64,7 +64,7 @@ def bias(cohort_dir, out):
             r = realizations(data, t, list(dict.fromkeys(x_vars + w_vars)), max_lag=max(v[1] for v in x_vars + w_vars))
             x, w = r.columns(list(x_vars)), r.columns(list(w_vars))
             shuffled = x[rng.permutation(len(x))]
-            for est in LAYER_ESTIMATORS:
+            for est in estimators:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     real = edge_flows(r.present, x, w, estimator=est, prng=0).as_dict()
@@ -82,7 +82,7 @@ def bias(cohort_dir, out):
         print(subject["subject"], flush=True)
     Path(out).write_text(json.dumps(rows))
     print(f"\nmean over {len(summary['subjects'])} subjects x 6 edges (bits): shuffled source (= bias) | real")
-    for est in LAYER_ESTIMATORS:
+    for est in estimators:
         sel = [r for r in rows if r["estimator"] == est]
         b = {k: np.mean([r["shuffled"][k] for r in sel]) for k in LAYERS}
         v = {k: np.mean([r["real"][k] for r in sel]) for k in LAYERS}
@@ -139,9 +139,10 @@ def main():
     parser.add_argument("--out", default=None)
     parser.add_argument("--estimators", nargs="+", default=list(SELECTION_ESTIMATORS))
     parser.add_argument("--files", default="sub-*_hfa.nc")
+    parser.add_argument("--layer-estimators", nargs="+", default=list(LAYER_ESTIMATORS))
     args = parser.parse_args()
     if args.part == "bias":
-        bias(args.cohort, args.out or "catfr_bias.json")
+        bias(args.cohort, args.out or "catfr_bias.json", args.layer_estimators)
     else:
         selection(args.pilot, args.out or "catfr_selection.json", args.estimators, args.files)
 

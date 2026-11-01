@@ -49,16 +49,16 @@ def one(args):
     from infoflow.crossfit import crossfit_flows
     from infoflow.measures import edge_flows
 
-    name, n, d, rep = args
+    name, n, d, rep, estimators = args
     seed = zlib.crc32(f"{name}-{n}-{d}-{rep}".encode())
     pairs = sample_pairs(mixture(**PROCESSES[name]), n + 1, seed)
     x, y = pairs[:-1, 0], pairs[1:, 1]
     rng = np.random.default_rng(seed + 1)
     w = np.column_stack([pairs[:-1, 1], rng.integers(0, 3, size=(n, d))])
-    out = np.full((2, len(ESTIMATORS), len(LAYERS)), np.nan)
+    out = np.full((2, len(estimators), len(LAYERS)), np.nan)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        for e, est in enumerate(ESTIMATORS):
+        for e, est in enumerate(estimators):
             for m, fn in enumerate((edge_flows, crossfit_flows)):
                 try:
                     flow = fn(y, x, w, estimator=est, prng=0)
@@ -66,7 +66,7 @@ def one(args):
                     continue
                 values = flow.as_dict()
                 out[m, e] = [values[k] for k in LAYERS]
-    return args, out
+    return args[:4], out
 
 
 def main():
@@ -76,11 +76,13 @@ def main():
     parser.add_argument("--d", type=int, nargs="+", default=[0, 1, 2, 3])
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--out", default="layer_accuracy.nc")
+    parser.add_argument("--estimators", nargs="+", default=list(ESTIMATORS))
     args = parser.parse_args()
 
     exact = truths()
-    jobs = [(p, n, d, r) for p in PROCESSES for n in args.n for d in args.d for r in range(args.reps)]
-    shape = (len(PROCESSES), len(args.n), len(args.d), args.reps, 2, len(ESTIMATORS), len(LAYERS))
+    estimators = tuple(args.estimators)
+    jobs = [(p, n, d, r, estimators) for p in PROCESSES for n in args.n for d in args.d for r in range(args.reps)]
+    shape = (len(PROCESSES), len(args.n), len(args.d), args.reps, 2, len(estimators), len(LAYERS))
     values = np.full(shape, np.nan)
     with ProcessPoolExecutor(args.workers) as pool:
         for (p, n, d, r), out in pool.map(one, jobs, chunksize=4):
@@ -93,7 +95,7 @@ def main():
         },
         coords={
             "process": list(PROCESSES), "n": args.n, "d": args.d, "rep": range(args.reps),
-            "path": ["single", "crossfit"], "estimator": list(ESTIMATORS), "layer": list(LAYERS),
+            "path": ["single", "crossfit"], "estimator": list(estimators), "layer": list(LAYERS),
         },
     )  # fmt: skip
     ds.to_netcdf(args.out)

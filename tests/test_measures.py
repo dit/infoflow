@@ -141,6 +141,17 @@ def test_dit_estimators_in_layers(estimator):
     assert crossfit.intrinsic > 0.3 and crossfit.synergistic < 0.05
 
 
+def test_dit_estimators_accept_single_outcome_terms():
+    from dit.inference.estimators import ENTROPY_ESTIMATORS
+
+    if "pym" not in ENTROPY_ESTIMATORS:
+        pytest.skip("needs dit with the PYM estimator")
+    rng = np.random.default_rng(6)
+    table = np.zeros((2, 2, 1))
+    np.add.at(table, (rng.integers(0, 2, 300), rng.integers(0, 2, 300), 0), 1.0)
+    assert np.isfinite(cmi_from_joint(table, "pym"))
+
+
 def test_intrinsic_flow_guards_oversized_channels():
     p = np.random.default_rng(0).random((2, 3, 40))
     te, tdmi = cmi_from_joint(p), cmi_from_joint(p.sum(axis=2, keepdims=True))
