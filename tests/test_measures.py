@@ -148,7 +148,7 @@ def test_dit_estimators_accept_single_outcome_terms():
         pytest.skip("needs dit with the PYM estimator")
     rng = np.random.default_rng(6)
     table = np.zeros((2, 2, 1))
-    np.add.at(table, (rng.integers(0, 2, 300), rng.integers(0, 2, 300), 0), 1.0)
+    np.add.at(table, (rng.integers(0, 2, 300), rng.integers(0, 2, 300), np.zeros(300, dtype=np.int64)), 1.0)
     assert np.isfinite(cmi_from_joint(table, "pym"))
 
 
