@@ -105,8 +105,11 @@ def main():
     parser.add_argument("--source-lag", type=int, default=2)
     parser.add_argument("--n-perm", type=int, default=5000)
     parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--estimator", default="miller_madow", help="layer estimator of the comparisons")
+    parser.add_argument("--tag", default="", help="write results to cohort/<tag>/")
     args = parser.parse_args()
-    COHORT.mkdir(parents=True, exist_ok=True)
+    out_dir = COHORT / args.tag if args.tag else COHORT
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     rows = choose(args.min_trials, args.per_roi)
     print(f"{len(rows)} eligible subjects", flush=True)
@@ -142,6 +145,7 @@ def main():
             n_perm=500,
             curtail=10,
             map_fn=thread_map(args.threads),
+            estimator=args.estimator,
             prng=0,
         )
         per_subject.append(
@@ -161,22 +165,35 @@ def main():
 
     fixed = fixed_network(args.source_lag)
     between = compare_networks(
-        fixed, fixed, data_rec, data_forg, design="between", dependent=True, n_perm=args.n_perm, prng=0
+        fixed,
+        fixed,
+        data_rec,
+        data_forg,
+        design="between",
+        dependent=True,
+        n_perm=args.n_perm,
+        estimator=args.estimator,
+        prng=0,
     )
-    between.dataset.to_netcdf(COHORT / "between.nc")
+    between.dataset.to_netcdf(out_dir / "between.nc")
     from infoflow.compare import _edge_values
 
     per_unit = {}
     for (s, t), (x_vars, w_vars) in between.edges.items():
         per_unit[f"{ROIS[s]}->{ROIS[t]}"] = {
-            "recalled": [[_edge_values(d, t, x_vars, w_vars)[k] for k in LAYERS] for d in data_rec],
-            "forgotten": [[_edge_values(d, t, x_vars, w_vars)[k] for k in LAYERS] for d in data_forg],
+            "recalled": [
+                [_edge_values(d, t, x_vars, w_vars, estimator=args.estimator)[k] for k in LAYERS] for d in data_rec
+            ],
+            "forgotten": [
+                [_edge_values(d, t, x_vars, w_vars, estimator=args.estimator)[k] for k in LAYERS] for d in data_forg
+            ],
         }
     summary = {
         "subjects": per_subject,
         "skipped": skipped,
         "source_lag": args.source_lag,
         "n_perm": args.n_perm,
+        "estimator": args.estimator,
         "between": {
             f"{ROIS[s]}->{ROIS[t]}": {
                 k: {
@@ -189,7 +206,7 @@ def main():
         },
         "per_unit": per_unit,
     }
-    (COHORT / "summary.json").write_text(json.dumps(summary, indent=2, default=str))
+    (out_dir / "summary.json").write_text(json.dumps(summary, indent=2, default=str))
     print(json.dumps(summary["between"], indent=1), flush=True)
 
 
