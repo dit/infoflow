@@ -20,11 +20,12 @@ import argparse
 import json
 from collections import defaultdict
 from itertools import zip_longest
+from pathlib import Path
 
 import mne
 import numpy as np
 import xarray as xr
-from common import OUT, ROIS, pair_regions, session_files, word_events
+from common import OUT, ROIS, pair_regions, retrieval_windows, session_files, word_events
 
 EPOCH = 1.6
 PAD = 1.0
@@ -64,6 +65,57 @@ def epochs_of(raw, onsets, tmin, tmax):
     return np.stack([data[:, s : s + n] for s in starts[keep]]), keep
 
 
+def hfa_epochs(hf, starts):
+    """
+    HFA of ``EPOCH``-second windows starting at `starts`, from a 500 Hz recording.
+
+    Morlet power is computed on windows padded by ``PAD`` seconds each side and cropped,
+    so the window has no edge artifacts.
+    """
+    padded, keep = epochs_of(hf, np.asarray(starts), -PAD, EPOCH + PAD)
+    power = mne.time_frequency.tfr_array_morlet(padded, 500.0, HFA_FREQS, n_cycles=7, output="power", verbose="error")
+    lo = int(PAD * 500)
+    env = np.log10(power.mean(axis=2))[:, :, lo : lo + int(EPOCH * 500)]
+    step = int(500 / HFA_SFREQ)
+    return env.reshape(*env.shape[:2], -1, step).mean(axis=-1), keep
+
+
+def prepare_phases(subject, session, per_roi, out_dir):
+    """
+    Encoding and retrieval HFA epochs of one session, for the directed-flow analysis.
+
+    ``encoding``: every non-practice WORD, 0-1.6 s after onset, ``recalled`` as usual.
+    ``retrieval``: the 1.6 s before correct recalls (``recalled`` True) and deliberation
+    windows of the recall periods (False), from :func:`common.retrieval_windows`.
+    """
+    files = session_files(subject, session)
+    regions = pair_regions(files["channels"], files["electrodes"])
+    raw = mne.io.read_raw_edf(files["edf"], preload=False, verbose="error")
+    sfreq = raw.info["sfreq"]
+    regions = {k: v for k, v in regions.items() if k in raw.ch_names}
+    picks = pick_pairs(regions, per_roi)
+    raw.pick(picks).load_data(verbose="error")
+    raw.notch_filter(np.arange(60, sfreq / 2 - 1, 60), verbose="error")
+    hf = raw.resample(500.0, verbose="error")
+    attrs = {"subject": subject, "session": session, "source_sfreq": sfreq, "signal": "hfa"}
+
+    words = word_events(files["events"], sfreq)
+    env, keep = hfa_epochs(hf, [w["onset"] for w in words])
+    encoding = to_dataset(env, HFA_SFREQ, words, keep, picks, regions, {**attrs, "phase": "encoding"})
+
+    recall, deliberation = retrieval_windows(files["events"], sfreq)
+    starts = np.concatenate([recall, deliberation])
+    labels = [{"recalled": i < len(recall), "list": -1, "serialpos": -1, "item": ""} for i in range(len(starts))]
+    env, keep = hfa_epochs(hf, starts)
+    retrieval = to_dataset(env, HFA_SFREQ, labels, keep, picks, regions, {**attrs, "phase": "retrieval"})
+    retrieval = retrieval.assign_coords(start=("trial", starts[keep]))
+
+    stem = Path(out_dir) / f"sub-{subject}_ses-{session}"
+    encoding.to_netcdf(f"{stem}_encoding.nc")
+    retrieval.to_netcdf(f"{stem}_retrieval.nc")
+    return encoding, retrieval
+
+
 def to_dataset(values, sfreq, words, keep, picks, regions, attrs):
     kept = [w for w, k in zip(words, keep) if k]
     return xr.Dataset(
@@ -101,12 +153,7 @@ def prepare(subject, session, per_roi):
     broadband = to_dataset(values, BROADBAND_SFREQ, words, keep, picks, regions, {**attrs, "signal": "broadband"})
 
     hf = raw.copy().resample(500.0, verbose="error")
-    padded, keep = epochs_of(hf, onsets, -PAD, EPOCH + PAD)
-    power = mne.time_frequency.tfr_array_morlet(padded, 500.0, HFA_FREQS, n_cycles=7, output="power", verbose="error")
-    lo = int(PAD * 500)
-    env = np.log10(power.mean(axis=2))[:, :, lo : lo + int(EPOCH * 500)]
-    step = int(500 / HFA_SFREQ)
-    env = env.reshape(*env.shape[:2], -1, step).mean(axis=-1)
+    env, keep = hfa_epochs(hf, onsets)
     hfa = to_dataset(env, HFA_SFREQ, words, keep, picks, regions, {**attrs, "signal": "hfa"})
 
     stem = OUT / f"sub-{subject}_ses-{session}"

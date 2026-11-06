@@ -13,6 +13,8 @@ import os
 import re
 from pathlib import Path
 
+import numpy as np
+
 DATASET = "ds004809"
 BUCKET = f"s3://openneuro.org/{DATASET}/"
 ROOT = Path(os.environ.get("CATFR_ROOT", Path.home() / "data" / "openneuro" / DATASET))
@@ -112,6 +114,58 @@ def word_events(events_tsv, sfreq):
             }
         )
     return words
+
+
+def retrieval_windows(events_tsv, sfreq, length=1.6, clear=1.8, margin=1.0, step=1.6, after=1.6):
+    """
+    Start times (seconds from the recording start) of retrieval windows.
+
+    Returns ``(recall, deliberation)``. A recall window is the `length` seconds before a
+    correct, first recall of a list item, inside its recall period, with no other
+    vocalization starting in the `clear` seconds before the recall. Deliberation windows
+    tile the recall periods every `step` seconds with no vocalization from `margin`
+    seconds before to `after` seconds after them.
+
+    With the defaults no two windows share a sample: deliberation windows do not
+    overlap each other (``step >= length``) or any recall window (``after >= length``).
+    Overlapping windows duplicate samples, which bias-corrected entropy estimators read
+    as better-sampled distributions, inflating transfer entropy and synergy.
+    """
+    rows = [r for r in read_tsv(events_tsv) if int(r["sample"]) >= 0]
+    words = {}
+    for r in rows:
+        if r["trial_type"] == "WORD" and int(r["list"]) >= 1:
+            words.setdefault(r["list"], set()).add(r["item_name"].upper())
+    recall, deliberation = [], []
+    starts = {r["list"]: int(r["sample"]) / sfreq for r in rows if r["trial_type"] == "REC_START"}
+    ends = {r["list"]: int(r["sample"]) / sfreq for r in rows if r["trial_type"] == "REC_END"}
+    for lst, start in starts.items():
+        if lst not in ends or lst not in words:
+            continue
+        end = ends[lst]
+        vocal = sorted(
+            int(r["sample"]) / sfreq
+            for r in rows
+            if r["list"] == lst
+            and r["trial_type"] in ("REC_WORD", "REC_WORD_VV")
+            and start <= int(r["sample"]) / sfreq <= end
+        )
+        said = set()
+        for r in rows:
+            if r["list"] != lst or r["trial_type"] != "REC_WORD":
+                continue
+            t, item = int(r["sample"]) / sfreq, r["item_name"].upper()
+            first = item in words[lst] and item not in said
+            said.add(item)
+            earlier = [v for v in vocal if v < t]
+            if first and t - length >= start and (not earlier or t - earlier[-1] >= clear):
+                recall.append(t - length)
+        s = start + margin
+        while s + length + after <= end:
+            if not any(s - margin <= v <= s + length + after for v in vocal):
+                deliberation.append(s)
+            s += step
+    return np.array(recall), np.array(deliberation)
 
 
 def session_files(subject, session, root=ROOT):
