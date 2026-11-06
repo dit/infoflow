@@ -23,7 +23,7 @@ analyze), `validation/synergy_null.py`; follows `reports/catfr_pilot.md` and
   q = 0.012-0.031), by about 0.0001 bits. This was not pre-specified and is not a finding.
 - **Open issues closed:** `compare_networks(estimator=...)` (the 25-subject memory contrast
   rerun with Chao-Wang-Jost: still null); the synergistic null excess traced to chance;
-  dit's broken `prng` alias fixed upstream (dit #324).
+  infoflow passes dit's new `rng` keyword everywhere (#14).
 
 ## 1. Design (fixed before the analysis)
 
@@ -111,8 +111,9 @@ subjects, MTL in 54. Retrieval: PFC higher before recalls in 46 of 56.
   synergy is nominal (4.6%) but 56% of its p-values are exactly 1: at about 85 trials per
   group its synergy is usually clipped to zero, so it has little power for synergy at this
   sample size.
-- **dit's `prng` alias.** dit #324 adds the missing `@renamed_kwarg("prng", "rng")` to both
-  implementations behind `total_correlation_ksg`, with a regression test.
+- **dit's `prng` keyword.** Rather than restoring the alias in dit, infoflow uses `rng=`
+  for every dit call: `total_correlation_ksg` since #12, and the surrogates and
+  `select_markov_order` in #14.
 
 ## 5. Where this leaves directed flow
 
