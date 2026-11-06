@@ -51,7 +51,7 @@ def _resolve_te(target, history_length, source_history, lag, max_history, prng):
             N = sum(len(t) for t in trials)
             M = max(len(alphabet), 2)
             max_history = max(int(np.log(max(N, 1) / 5) / np.log(M)) - 1, 1)
-        history_length = select_markov_order(target, max_history, prng=prng)
+        history_length = select_markov_order(target, max_history, rng=prng)
     k = int(history_length)
     l = max(k, 1) if source_history is None else int(source_history)
     if k < 0:
@@ -236,14 +236,14 @@ def transfer_entropy_test(
         source = np.asarray(source)
     if null == "whittle":
         order = l if surrogate_order is None else surrogate_order
-        surrogates = whittle_surrogates(source, order, n=n_surrogates, prng=rng)
+        surrogates = whittle_surrogates(source, order, n=n_surrogates, rng=rng)
     elif null == "shift":
-        surrogates = shift_surrogates(source, n=n_surrogates, prng=rng)
+        surrogates = shift_surrogates(source, n=n_surrogates, rng=rng)
     elif null == "block":
         if block_length is None:
             N = min(len(t) for t in source) if is_trials(source) else len(source)
             block_length = max(2 * (l + lag), round(np.sqrt(N)))
-        surrogates = block_surrogates(source, block_length, n=n_surrogates, prng=rng)
+        surrogates = block_surrogates(source, block_length, n=n_surrogates, rng=rng)
     else:
         raise ValueError(f"Unknown null {null!r}.")
     null_values = []
