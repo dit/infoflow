@@ -43,13 +43,13 @@ class NetworkComparison:
     edges: dict
 
 
-def _edge_values(data, target, x_vars, w_vars, restarts=1):
+def _edge_values(data, target, x_vars, w_vars, restarts=1, estimator="miller_madow"):
     variables = list(dict.fromkeys(list(x_vars) + list(w_vars)))
     r = realizations(data, target, variables, max_lag=max(v[1] for v in variables))
     if len(r) < 10:
         return dict.fromkeys(LAYERS, np.nan)
     w = r.columns(list(w_vars)) if w_vars else None
-    flow = edge_flows(r.present, r.columns(list(x_vars)), w, estimator="miller_madow", restarts=restarts, prng=0)
+    flow = edge_flows(r.present, r.columns(list(x_vars)), w, estimator=estimator, restarts=restarts, prng=0)
     return {k: flow.as_dict()[k] for k in LAYERS}
 
 
@@ -95,6 +95,7 @@ def compare_networks(
     alpha=0.05,
     curtail=None,
     map_fn=map,
+    estimator="miller_madow",
     prng=None,
 ):
     """
@@ -125,6 +126,10 @@ def compare_networks(
     map_fn : callable
         ``map``-like function over edges (e.g. from :mod:`infoflow.parallel`). Each
         edge's permutations use a seed drawn up front, so results do not depend on it.
+    estimator : str
+        The layers' estimator (see :func:`~infoflow.measures.cmi_from_joint`).
+        Miller--Madow by default; :data:`~infoflow.measures.DEFAULT_LAYER_ESTIMATOR`
+        has less bias in large contexts but costs about 13 times as much per entropy.
     prng : None, int, Generator
 
     Returns
@@ -149,7 +154,10 @@ def compare_networks(
 
     if design == "between":
         # Per-subject values are fixed; permutations reassign subjects to conditions.
-        per_unit = {e: np.array([[_edge_values(u, e[1], *edges[e])[k] for k in LAYERS] for u in units]) for e in edges}
+        per_unit = {
+            e: np.array([[_edge_values(u, e[1], *edges[e], estimator=estimator)[k] for k in LAYERS] for u in units])
+            for e in edges
+        }
 
         def statistic(lab, e):
             v = per_unit[e]
@@ -158,8 +166,12 @@ def compare_networks(
     else:
 
         def statistic(lab, e):
-            a = _edge_values(_pool([u for u, g in zip(units, lab, strict=True) if g == 0]), e[1], *edges[e])
-            b = _edge_values(_pool([u for u, g in zip(units, lab, strict=True) if g == 1]), e[1], *edges[e])
+            a = _edge_values(
+                _pool([u for u, g in zip(units, lab, strict=True) if g == 0]), e[1], *edges[e], estimator=estimator
+            )
+            b = _edge_values(
+                _pool([u for u, g in zip(units, lab, strict=True) if g == 1]), e[1], *edges[e], estimator=estimator
+            )
             return np.array([a[k] for k in LAYERS]), np.array([b[k] for k in LAYERS])
 
     def permuted(edge_rng):
@@ -206,6 +218,12 @@ def compare_networks(
             "significant": (("layer", "source", "target"), np.stack([significant[k] for k in LAYERS])),
         },
         coords={"layer": list(LAYERS), "source": names, "target": names},
-        attrs={"design": design, "dependent": int(dependent), "n_perm": n_perm, "curtail": curtail or 0},
+        attrs={
+            "design": design,
+            "dependent": int(dependent),
+            "n_perm": n_perm,
+            "curtail": curtail or 0,
+            "estimator": estimator,
+        },  # fmt: skip
     )
     return NetworkComparison(ds, edges)

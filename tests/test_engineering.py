@@ -63,6 +63,18 @@ def test_compare_curtailed_and_parallel():
     assert np.allclose(5 / p[tested], np.round(5 / p[tested]))
 
 
+def test_compare_estimator_option():
+    a, b = _coupled_trials(0.9, 10, 300, seed=0), _coupled_trials(0.5, 10, 300, seed=1)
+    net_a, net_b = _net(a), _net(b)
+    mm = compare_networks(net_a, net_b, a, b, n_perm=39, prng=0)
+    cwj = compare_networks(net_a, net_b, a, b, n_perm=39, estimator="chao_wang_jost", prng=0)
+    assert mm.dataset.attrs["estimator"] == "miller_madow" and cwj.dataset.attrs["estimator"] == "chao_wang_jost"
+    diff = cwj.dataset["difference"].sel(layer="intrinsic").values[0, 1]
+    assert diff > 0.2 and bool(cwj.dataset["significant"].sel(layer="intrinsic").values[0, 1])
+    layer = dict(layer="intrinsic", source="x0", target="x1")
+    assert float(mm.dataset["a"].sel(**layer)) != float(cwj.dataset["a"].sel(**layer))
+
+
 def test_compare_within_null_is_calibrated_with_pooled_selection():
     pooled = _coupled_trials(0.8, 40, 200, seed=7)
     halves = []
