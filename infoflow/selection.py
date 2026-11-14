@@ -11,7 +11,8 @@ transfer entropy :cite:`Lizier2012,Novelli2019`, with two additions:
    with a source, e.g. ``y_t = x_{t-1} xor y_{t-1}``). If single-variable additions
    stop, a *synergy-aware pair search* tests pairs of remaining variables jointly,
    which recovers parents that act only together (e.g. ``Y = X1 xor X2``, where
-   each alone carries no information).
+   each alone carries no information). Its pool holds every remaining candidate, up
+   to a budget of pairs.
 3. Prune source variables with a *minimum statistic* test.
 4. Test all selected sources jointly with an *omnibus* test, and give each source
    variable a p-value with the *sequential maximum statistic*.
@@ -27,9 +28,10 @@ realizations, so candidate sets are compared on the same samples.
 
 import os
 import time
+import warnings
 from dataclasses import dataclass, field
 from itertools import combinations
-from math import factorial
+from math import factorial, isqrt
 
 import numpy as np
 from dit.inference._symbols import as_generator
@@ -106,9 +108,19 @@ class SkeletonSettings:
     admitted each source. ``target_estimators`` maps targets to their own estimator
     (or ensemble), overriding ``estimator`` for them.
 
+    ``synergy_search`` tests pairs of candidates jointly once single additions stop, since
+    an XOR target needs both of its parents at once. The pair pool takes the remaining
+    candidates in a fixed order (lag, then process) that does not look at the target, so
+    the maximum statistic over its pairs stays a valid test. It holds as many candidates
+    as keep the number of pairs within ``max_pairs`` (5000 pairs, i.e. 100 candidates),
+    and at most ``max_pair_candidates`` if that is set. When candidates are left out, a
+    warning is issued and :attr:`TargetSkeleton.pair_pool_dropped` lists them.
+
     ``curtail`` (default: on for KSG and Gaussian) evaluates permutations ``curtail_batch`` at a time
     and stops a test as soon as its p-value must exceed the stage's level, which leaves
     every decision unchanged and saves most permutations in the many tests that fail.
+    The pair search is curtailed for every estimator unless ``curtail=False``: it
+    reports no p-value, and its pool can hold thousands of pairs.
     ``prescreen_alpha`` first tests each source process on its own (its best lag's
     transfer entropy given the selected target past, ``n_perm_prescreen`` permutations)
     and keeps only those passing for the multivariate search, at the risk of missing a
@@ -151,7 +163,8 @@ class SkeletonSettings:
     forced_conditionals: tuple = ()
     faes: bool = False
     synergy_search: bool = True
-    max_pair_candidates: int = 20
+    max_pair_candidates: int | None = None
+    max_pairs: int | None = 5000
     max_source_lag: int | None = None
     n_perm_pairs: int = 100
     alpha_pairs: float = 0.05
@@ -196,6 +209,10 @@ class SkeletonSettings:
             check_n_perm(getattr(self, f"n_perm_{name}"), getattr(self, f"alpha_{name}") / k)
         if self.synergy_search:
             check_n_perm(self.n_perm_pairs, self.alpha_pairs / k)
+        for name in ("max_pairs", "max_pair_candidates"):
+            value = getattr(self, name)
+            if value is not None and value < 0:
+                raise ValueError(f"{name} must be None or non-negative")
         if self.tdmi_screen:
             check_n_perm(self.n_perm_tdmi, self.alpha_tdmi / k)
         if self.ksg_null not in ("permutation", "local"):
@@ -226,6 +243,7 @@ class TargetSkeleton:
     significant: bool = False
     prescreened: list | None = None
     pairs: list = field(default_factory=list)
+    pair_pool_dropped: list = field(default_factory=list)
     tdmi_candidates: dict = field(default_factory=dict)
     n_samples: int = 0
     admitted_by: dict = field(default_factory=dict)
@@ -1093,23 +1111,52 @@ def _pair_search(cols, candidates, cond, settings, perm, batch=None):
     return pair if pair is not None and p <= settings.alpha_pairs else None
 
 
+def _largest_pool(max_pairs):
+    """
+    The largest number of candidates :math:`m` with :math:`m (m - 1) / 2` pairs at most `max_pairs`.
+    """
+    m = (1 + isqrt(1 + 8 * max_pairs)) // 2
+    while m * (m - 1) // 2 > max_pairs:
+        m -= 1
+    return m
+
+
+def _pair_pool(candidates, settings):
+    """
+    The candidates the pair search considers, and those it leaves out.
+
+    Candidates are taken in an order that does not look at the target (lag, then process),
+    so the maximum statistic over the pool's pairs stays a valid test: at most
+    ``max_pair_candidates`` of them, and no more than keep the pairs within ``max_pairs``.
+    """
+    ordered = sorted(candidates, key=lambda v: (v[1], v[0]))
+    size = len(ordered)
+    if settings.max_pair_candidates is not None:
+        size = min(size, settings.max_pair_candidates)
+    if settings.max_pairs is not None:
+        size = min(size, _largest_pool(settings.max_pairs))
+    return ordered[:size], ordered[size:]
+
+
 def _pair_test(cols, candidates, cond, settings, perm, batch=None, alpha=None):
     """
     The best pair of candidates and its max-statistic p-value (curtailed at `alpha`,
     default ``settings.alpha_pairs``), or ``(None, 1.0)`` without pairs.
+
+    Joint codes are built pair by pair rather than kept: a pool of 100 candidates has
+    4950 pairs, each a column as long as the data.
     """
     alpha = settings.alpha_pairs if alpha is None else alpha
     debiased = settings.statistic == "debiased"
-    pool = sorted(candidates, key=lambda v: (v[1], v[0]))[: settings.max_pair_candidates]
+    pool, _ = _pair_pool(candidates, settings)
     pairs = [(a, b) for a, b in combinations(pool, 2) if a[0] != b[0] or a[1] != b[1]]
     if not pairs:
         return None, 1.0
     z, Kz = cols.context(cond)
-    codes = [cols.joint([a, b]) for a, b in pairs]
-    obs = np.array(list(cols.map(lambda code: cols.cmi(code[0], code[1], z, Kz), codes)))
+    obs = np.array(list(cols.map(lambda pair: cols.cmi(*cols.joint(list(pair)), z, Kz), pairs)))
     if debiased:
         idx = [perm(z) for _ in range(settings.n_perm_pairs)]
-        nulls = np.array([cols.cmi_batch(c, K, z, Kz, idx) for c, K in codes])
+        nulls = np.array([cols.cmi_batch(*cols.joint(list(pair)), z, Kz, idx) for pair in pairs])
         shift = _centers(nulls, True)
         best = int(np.argmax(obs - shift))
         null = (nulls - shift[:, None]).max(axis=0)
@@ -1119,7 +1166,10 @@ def _pair_test(cols, candidates, cond, settings, perm, batch=None, alpha=None):
         observed = obs[best]
 
         def evaluate(idx):
-            return np.max([cols.cmi_batch(c, K, z, Kz, idx) for c, K in codes], axis=0)
+            top = np.full(len(idx), -np.inf)
+            for pair in pairs:
+                top = np.maximum(top, cols.cmi_batch(*cols.joint(list(pair)), z, Kz, idx))
+            return top
 
         null = _null_statistics(settings.n_perm_pairs, lambda: perm(z), evaluate, observed, alpha, batch)
     return pairs[best], _pvalue(null, observed)
@@ -1327,6 +1377,9 @@ class _SingleStages:
         self.deb = settings.statistic == "debiased"
         curtail = settings.curtail if settings.curtail is not None else name in ("ksg", "mixed", "gaussian")
         self.bt = settings.curtail_batch if curtail else None
+        # The pair search reports no p-value and can test thousands of pairs, so it is
+        # curtailed for every estimator unless curtailment is switched off explicitly.
+        self.pair_bt = settings.curtail_batch if settings.curtail is not False else None
         self.admitted = {}
 
     @property
@@ -1348,7 +1401,7 @@ class _SingleStages:
         )[2]
 
     def pair(self, pool, cond):
-        pair = _pair_search(self.cols, pool, cond, self.settings, self.perm, self.bt)
+        pair = _pair_search(self.cols, pool, cond, self.settings, self.perm, self.pair_bt)
         if pair is not None:
             self.admitted.update(dict.fromkeys(pair, self.name))
         return pair
@@ -1448,7 +1501,7 @@ class _EnsembleStages:
         s = self.settings
         best = None
         for m in self.members:
-            pair, p = self._timed(m, _pair_test, m.cols, pool, cond, s, m.perm, m.bt, s.alpha_pairs / self.k)
+            pair, p = self._timed(m, _pair_test, m.cols, pool, cond, s, m.perm, m.pair_bt, s.alpha_pairs / self.k)
             if pair is not None and (best is None or p < best[1]):
                 best = (pair, p, m.name)
         if best is None or self._combine(best[1]) > s.alpha_pairs:
@@ -1588,6 +1641,8 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         pool = remaining + screened + [v for v in target_cands if v not in past]
         if len(pool) < 2:
             break
+        pool, dropped = _pair_pool(pool, settings)
+        result.pair_pool_dropped += [v for v in dropped if v not in result.pair_pool_dropped]
         pair = stages.pair(pool, conditionals + past + selected)
         if pair is None:
             break
@@ -1596,6 +1651,12 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         result.pairs.append(pair)
         remaining = [v for v in remaining if v not in pair]
         screened = [v for v in screened if v not in pair]
+    if result.pair_pool_dropped:
+        warnings.warn(
+            "the pair search left some candidates out (max_pairs, max_pair_candidates); "
+            "see TargetSkeleton.pair_pool_dropped, and raise max_pairs or set it to None to search them",
+            stacklevel=2,
+        )
     base = conditionals + past
 
     if selected:
