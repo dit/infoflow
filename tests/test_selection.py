@@ -69,6 +69,61 @@ def test_xor_needs_pair_search():
     assert not {(0, 1), (1, 1)} <= set(without.sources)
 
 
+def _xor_target(n, n_processes, parents, flip, seed):
+    """
+    Independent fair bits, with the last process the noisy XOR of the given (process, lag) parents.
+    """
+    rng = np.random.default_rng(seed)
+    x = rng.integers(0, 2, (n, n_processes))
+    y = np.zeros(n, dtype=int)
+    for p, lag in parents:
+        y ^= np.roll(x[:, p], lag)
+    x[:, -1] = y ^ (rng.random(n) < flip)
+    return DiscreteData.from_discrete(x)
+
+
+def test_pair_pool_order_and_budget():
+    from infoflow.selection import _largest_pool, _pair_pool
+
+    assert [_largest_pool(m) for m in (0, 1, 2, 3, 190, 4950, 5000)] == [1, 2, 2, 3, 20, 100, 100]
+    candidates = [(p, lag) for p in range(4) for lag in (1, 2, 3)]
+    pool, dropped = _pair_pool(candidates, SkeletonSettings(max_pairs=None))
+    assert pool == sorted(candidates, key=lambda v: (v[1], v[0])) and dropped == []
+    pool, dropped = _pair_pool(candidates, SkeletonSettings(max_pairs=10))
+    assert pool == [(0, 1), (1, 1), (2, 1), (3, 1), (0, 2)] and len(dropped) == 7
+    pool, _ = _pair_pool(candidates, SkeletonSettings(max_pairs=None, max_pair_candidates=3))
+    assert pool == [(0, 1), (1, 1), (2, 1)]
+    with pytest.raises(ValueError, match="max_pairs"):
+        SkeletonSettings(max_pairs=-1).check()
+
+
+def test_pair_search_reaches_candidates_beyond_twenty():
+    """
+    XOR parents at lag 3 of process 5 and lag 2 of process 6 (of 8): in lag order (5, 3) is
+    the 21st candidate, beyond the 20 the pool used to stop at.
+    """
+    data = _xor_target(3000, 8, [(5, 3), (6, 2)], 0.1, 0)
+    found = select_parents(data, 7, Embedding(max_lag=1), settings=SkeletonSettings(**FAST), prng=0)
+    assert sorted(found.sources) == [(5, 3), (6, 2)] and found.significant
+    assert found.pair_pool_dropped == []
+    with pytest.warns(UserWarning, match="pair search left some candidates out"):
+        capped = select_parents(
+            data, 7, Embedding(max_lag=1), settings=SkeletonSettings(**FAST, max_pair_candidates=20), prng=0
+        )
+    assert not {(5, 3), (6, 2)} <= set(capped.sources)
+    assert (5, 3) in capped.pair_pool_dropped and (6, 2) not in capped.pair_pool_dropped
+
+
+def test_pair_search_curtailment_keeps_the_decision():
+    data = _xor_target(3000, 3, [(0, 1), (1, 1)], 0.1, 3)
+    curtailed, full = (
+        select_parents(data, 2, Embedding(max_lag=1), settings=SkeletonSettings(**FAST, curtail=c), prng=0)
+        for c in (None, False)
+    )
+    assert sorted(curtailed.sources) == sorted(full.sources) == [(0, 1), (1, 1)]
+    assert curtailed.pairs == full.pairs
+
+
 def test_target_past_selected():
     rng = np.random.default_rng(2)
     n = 3000

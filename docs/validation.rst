@@ -59,6 +59,35 @@ somewhat anti-conservative for strongly autocorrelated processes such as these V
 series, while weakly autocorrelated ones (the logistic maps) keep their precision.
 The options are therefore not the default.
 
+Pair search
+-----------
+
+The pair search (step 4 of :doc:`skeleton`) finds parents that inform the target only
+jointly, as in an XOR. Its pool takes candidates in order of lag and process, an order that
+does not look at the target, and it used to stop at the first 20 candidates. In larger
+networks that hid XOR parents at longer lags.
+
+``validation/pair_pool.py`` puts an XOR of two random processes, at random lags 1--4,
+into networks of independent fair bits. Each run uses 4000 samples, the default permutation
+counts, and 10 XOR and 10 null targets per size. The old pool is the first 20 candidates
+without curtailment; the new one holds up to ``max_pairs=5000`` pairs:
+
+==========  =========  ===============  ==============  ============
+Processes   Pool       XOR recovered    False parents   s per target
+==========  =========  ===============  ==============  ============
+8           first 20   5 / 10           0.00            2.3
+8           5000       10 / 10          0.10            3.8
+12          first 20   2 / 10           0.05            2.7
+12          5000       10 / 10          0.05            7.8
+20          first 20   0 / 10           0.05            3.7
+20          5000       10 / 10          0.25            25.6
+==========  =========  ===============  ==============  ============
+
+False parents are counted per target, over the XOR and null targets. The pair test keeps
+its level with the larger pool. On null targets it rejected in 5 of 100 with 12 processes
+(1540 pairs) and in 6 of 100 with 20 processes (4560 pairs). Most of the extra time is
+the full permutation null of a pair that is found.
+
 Large networks
 --------------
 

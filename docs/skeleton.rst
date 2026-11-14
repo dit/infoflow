@@ -10,7 +10,9 @@ multivariate transfer-entropy search of IDTxl
 2. add source lags conditioned on everything selected so far;
 3. revisit the target's past conditioned on the selected sources;
 4. search pairs of candidates that are only jointly informative, as in an XOR
-   (``synergy_search``);
+   (``synergy_search``). The pool holds every remaining candidate, up to ``max_pairs``
+   pairs (5000, i.e. 100 candidates) taken in order of lag, an order that does not
+   look at the target and so keeps the maximum statistic valid;
 5. prune with the minimum statistic, run an omnibus test of all sources jointly,
    and a sequential maximum-statistic test per source;
 6. control the false discovery rate across targets on the omnibus p-values.
