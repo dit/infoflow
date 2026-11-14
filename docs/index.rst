@@ -35,6 +35,7 @@ and false-discovery-rate control.
    spectral
    backbone
    interpretation
+   families
    hyperedges
    machines
    channels

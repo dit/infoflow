@@ -52,6 +52,7 @@ Nodes and interpretation
 .. automodule:: infoflow.nodes
 .. automodule:: infoflow.interpret
 .. automodule:: infoflow.contemporaneous
+.. automodule:: infoflow.families
 .. automodule:: infoflow.hyperedges
 .. automodule:: infoflow.oinfo
 
