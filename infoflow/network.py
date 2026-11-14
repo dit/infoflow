@@ -66,6 +66,10 @@ class MultiplexNetwork:
     backbone : BackboneResult, None
         Separate precomputed spectral structural evidence. Its neighbors guide the
         lagged parent search; its p-values/rates never replace flow-layer statistics.
+    contemporaneous_families : list of ExplanationFamily, None
+        Every lag-0 explanation allowed per component
+        (:func:`~infoflow.contemporaneous.contemporaneous_families`), with
+        ``contemporaneous="family"``.
     """
 
     dataset: xr.Dataset
@@ -77,6 +81,7 @@ class MultiplexNetwork:
     machines: "MachineLayer | None" = None
     channels: "ChannelLayer | None" = None
     backbone: "BackboneResult | None" = None
+    contemporaneous_families: list | None = None
 
     @property
     def names(self):
@@ -158,6 +163,9 @@ class MultiplexNetwork:
             kind = str(self.dataset["kind"].sel(source=src, target=tgt).item())
             delay = int(self.dataset["delay"].sel(source=src, target=tgt))
             lines.append(f"{src:>6} -> {tgt:<6}  {kind:<16}  {delay:5d}  " + "  ".join(cells))
+        if self.contemporaneous_families:
+            lines += ["", "lag-0 explanation families"]
+            lines += ["  " + family.describe(self.names) for family in self.contemporaneous_families]
         if self.machines is not None:
             lines += ["", self.machines.summary()]
         if self.channels is not None:
@@ -284,6 +292,7 @@ def infer_multiplex(
     node_layer=True,
     interpret=True,
     contemporaneous=False,
+    contemporaneous_settings=None,
     hyperedges=False,
     hyperedge_measure="ccs",
     max_sources=3,
@@ -348,9 +357,17 @@ def infer_multiplex(
         Add active information storage and predictability flags per node.
     interpret : bool
         Add edge roles (direct / confounded / mediated) and latent-confounding flags.
-    contemporaneous : bool
+    contemporaneous : bool or {'pc', 'family'}
         Add the optional lag-0 layer (:mod:`infoflow.contemporaneous`) as the
         ``contemporaneous`` variable (0 none, 1 undirected, 2 oriented source -> target).
+        ``True`` or ``'pc'`` reads adjacencies from dependence and orients colliders, PC-style.
+        ``'family'`` keeps every explanation that weaker adjacency faithfulness allows
+        (:func:`~infoflow.contemporaneous.contemporaneous_families`): ``contemporaneous``
+        then marks only what every explanation shares, ``contemporaneous_possible`` what any
+        explanation has, and ``network.contemporaneous_families`` lists the explanations.
+    contemporaneous_settings : dict, None
+        Keyword arguments for :func:`~infoflow.contemporaneous.contemporaneous_families`
+        (e.g. ``max_family_size``, ``tiers``, ``forbidden``, ``test``).
     hyperedges : bool
         Detect and classify PID hyperedges of each target's sets of parents
         (:func:`~infoflow.hyperedges.multivariate_hyperedges`) as ``network.hyperedges``.
@@ -455,6 +472,8 @@ def infer_multiplex(
         raise ValueError("layer_symbols must be 'preprocessed' or 'adaptive'")
     if layer_method not in ("crossfit", "bayes", "auto"):
         raise ValueError("layer_method must be 'crossfit', 'bayes', or 'auto'")
+    if contemporaneous not in (False, True, "pc", "family"):
+        raise ValueError("contemporaneous must be True, False, 'pc', or 'family'")
     if layer_method != "crossfit":
         from .bayes import _pymc
 
@@ -610,7 +629,18 @@ def infer_multiplex(
         dataset["iie"] = (("source", "target"), iie)
         dataset["iie_pvalue"] = (("source", "target"), iie_p)
         dataset["di"] = (("source", "target"), te + iie)
-    if contemporaneous:
+    lag0_families = None
+    if contemporaneous == "family":
+        from .contemporaneous import contemporaneous_families
+
+        lag0 = contemporaneous_families(
+            estimation_data, skeleton, alpha=alpha, prng=rng, exchange=exchange, **(contemporaneous_settings or {})
+        )
+        lag0_families = lag0.families
+        dataset["contemporaneous"] = (("source", "target"), lag0.graph)
+        dataset["contemporaneous_cmi"] = (("source", "target"), lag0.values)
+        dataset["contemporaneous_possible"] = (("source", "target"), lag0.possible)
+    elif contemporaneous:
         from .contemporaneous import contemporaneous_layer
 
         graph, values, _ = contemporaneous_layer(estimation_data, skeleton, alpha=alpha, prng=rng, exchange=exchange)
@@ -640,6 +670,7 @@ def infer_multiplex(
         "node_layer": node_layer,
         "interpret": interpret,
         "contemporaneous": contemporaneous,
+        "contemporaneous_settings": contemporaneous_settings,
         "directed_information": directed_information,
         "hyperedges": hyperedges,
         "layer_symbols": layer_symbols,
@@ -687,6 +718,7 @@ def infer_multiplex(
         report=report,
         hyperedges=pid,
         backbone=backbone,
+        contemporaneous_families=lag0_families,
     )
     if machines:
         from .machines import infer_machines

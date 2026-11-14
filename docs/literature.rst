@@ -79,6 +79,19 @@ dependence by running selection on subsamples and aggregating with e-values
 control through the e-BH procedure :cite:`Wang2022,Ren2024`. Stability selection
 :cite:`Meinshausen2010` reports how often each variable is selected over subsamples.
 
+**Faithfulness violations.** Constraint-based learners read adjacencies from dependences,
+so they delete links whose dependence shows only jointly: an XOR target is independent of
+each of its parents. Weaker adjacency faithfulness :cite:`Marx2021weaker` lets a link be
+supported by a triple association instead. :cite:`Hourican2026` operationalise it in two
+ways. One is a grow-shrink learner that vetoes a removal when one more conditioning variable
+restores dependence, and protects links whose whole-minus-sum information exceeds 0.3 bits.
+The other searches for the family of DAGs that are Markov, weakly adjacency faithful and
+SGS-minimal. Without time order an XOR has three such explanations; with it, one. Their
+finite-sample families are often empty, and their searches did not finish beyond eight
+variables. ``infoflow`` already has the first idea in the lagged search (the pair search,
+and pruning of each parent given the others). It applies the second at lag 0, where no time
+order helps, with decisions corrected for the number of statements in a component.
+
 **Higher-order structure.** The O-information rate :cite:`Faes2022` extends the
 O-information :cite:`Rosas2019` to processes; its local version (for a link) and
 gradients (for a node) :cite:`Scagliarini2023` give a network representation of
@@ -116,6 +129,9 @@ Regimes                             :func:`~infoflow.regimes.infer_regimes`,
                                     :func:`~infoflow.regimes.compare_regimes`
 Multiple datasets                   :func:`~infoflow.regimes.infer_with_context`
 Stability selection / e-values      :func:`~infoflow.stability.stability_selection`
+Weaker adjacency faithfulness       pair search for lagged parents (``synergy_search``);
+                                    lag-0 explanation families,
+                                    :func:`~infoflow.contemporaneous.contemporaneous_families`
 Mixed-type CMI                      ``SkeletonSettings(estimator="mixed")``
 Predictive (AGM-TE style) TE        :func:`~infoflow.predictive.predictive_transfer_entropy`
 O-information rate                  :mod:`infoflow.oinfo`

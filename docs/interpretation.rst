@@ -36,7 +36,8 @@ Optional layers:
 
 * a lag-0 layer with collider orientation in the style of PCMCI+
   :cite:`Runge2020` (:mod:`infoflow.contemporaneous`), with an adapter to Tigramite
-  :cite:`Runge2018`;
+  :cite:`Runge2018`, or every lag-0 explanation that weaker adjacency faithfulness
+  allows, which also sees a lag-0 XOR (:doc:`families`);
 * detected and classified partial-information-decomposition hyperedges over sets of
   parents, with any of dit's PID measures (:doc:`hyperedges`).
 
