@@ -13,6 +13,7 @@ __all__ = (
     "coupled_logistic",
     "coupled_tent",
     "lorenz96",
+    "multiscale_ou",
     "mute_network",
     "noisy_eca",
     "orthogonal_features",
@@ -26,6 +27,54 @@ __all__ = (
 
 def _rng(seed):
     return np.random.default_rng(seed)
+
+
+def multiscale_ou(n, coupling, timescales, *, dt=0.1, diffusion=None, seed=None):
+    """
+    Stationary linear multiscale Langevin data :cite:`Raiola2026`.
+
+    ``coupling[target, source]`` encodes directed interactions, with zero diagonal.
+    The dynamics is ``dx_i = (-x_i + sum_j A_ij x_j) dt/tau_i +
+    sqrt(2 D_i/tau_i) dW_i`` with independent noise. Uses the exact sampled OU
+    transition and stationary initialization, not Euler integration. ``dt`` is the
+    observation spacing, so spectral analysis uses ``fs=1/dt``. Returns (n, P).
+    """
+    from scipy.linalg import expm, solve_continuous_lyapunov
+
+    A, tau = np.asarray(coupling, dtype=float), np.asarray(timescales, dtype=float)
+    if A.ndim != 2 or A.shape[0] != A.shape[1] or tau.shape != (len(A),) or not len(A):
+        raise ValueError("coupling must be square and timescales must match its process count")
+    D = np.ones(len(A)) if diffusion is None else np.asarray(diffusion, dtype=float)
+    if (
+        not isinstance(n, (int, np.integer))
+        or isinstance(n, (bool, np.bool_))
+        or n < 1
+        or not np.isfinite(dt)
+        or dt <= 0
+        or D.shape != tau.shape
+        or not np.all(np.isfinite(A))
+        or not np.all(np.isfinite(tau))
+        or np.any(tau <= 0)
+        or not np.all(np.isfinite(D))
+        or np.any(D <= 0)
+        or np.any(np.diag(A) != 0)
+    ):
+        raise ValueError("need n >= 1, dt > 0, positive finite timescales/diffusion and zero self-couplings")
+    F = (A - np.eye(len(A))) / tau[:, None]
+    if np.max(np.linalg.eigvals(F).real) >= 0:
+        raise ValueError("couplings must define a stable stationary OU process")
+    covariance = solve_continuous_lyapunov(F, -np.diag(2 * D / tau))
+    covariance = (covariance + covariance.T) / 2
+    transition = expm(F * dt)
+    innovation = covariance - transition @ covariance @ transition.T
+    chol = np.linalg.cholesky((innovation + innovation.T) / 2)
+    rng = _rng(seed)
+    x = np.empty((n, len(A)))
+    x[0] = rng.multivariate_normal(np.zeros(len(A)), covariance)
+    noise = rng.normal(size=(n - 1, len(A))) @ chol.T
+    for t in range(1, n):
+        x[t] = transition @ x[t - 1] + noise[t - 1]
+    return x
 
 
 def var_process(n, coefficients, noise_std=0.1, seed=None, burn_in=200):

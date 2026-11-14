@@ -84,6 +84,14 @@ O-information :cite:`Rosas2019` to processes; its local version (for a link) and
 gradients (for a node) :cite:`Scagliarini2023` give a network representation of
 redundancy- versus synergy-dominated interactions :cite:`Mijatovic2025`.
 
+**Multiscale spectral structure.** :cite:`Raiola2026` combines ordinary and
+fully conditioned Gaussian information rates to identify an undirected forest
+backbone; asymptotic MIRMO labels and a timescale order orient its links.
+:mod:`infoflow.spectral` and :mod:`infoflow.backbone` implement the independent
+spectral route and an opt-in source-candidate handoff into existing lag/layer
+inference (:doc:`backbone`). Its fitted Gaussian spectral null tests are an
+experimental addition; a single finite rate does not identify an asymptotic label.
+
 Gap analysis
 ------------
 
@@ -111,6 +119,8 @@ Stability selection / e-values      :func:`~infoflow.stability.stability_selecti
 Mixed-type CMI                      ``SkeletonSettings(estimator="mixed")``
 Predictive (AGM-TE style) TE        :func:`~infoflow.predictive.predictive_transfer_entropy`
 O-information rate                  :mod:`infoflow.oinfo`
+Spectral MIR / forest backbones     :mod:`infoflow.spectral`, :mod:`infoflow.backbone`;
+                                    experimental Gaussian tests, opt-in handoff
 Continuous-time spike TE            open: needs an event-time data model
                                     :cite:`Shorten2021`
 Neural forecasters (AGM-TE, TREET)  open: the predictive estimator accepts any forecaster

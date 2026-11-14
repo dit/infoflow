@@ -6,6 +6,10 @@ series. Each directed edge's transfer entropy is decomposed into intrinsic,
 synergistic, and shared flow :cite:`James2016`, and each node carries its active
 information storage. Estimation, testing, and interpretation build on the
 estimators and null generators of :mod:`dit.inference`.
+
+An independent, opt-in Gaussian spectral route proposes structural-backbone
+candidates before the usual lag selection and flow-layer tests; its whole-trajectory
+rates and asymptotic direction evidence remain separate from those layers.
 """
 
 from importlib.metadata import PackageNotFoundError
@@ -13,6 +17,14 @@ from importlib.metadata import version as _version
 
 from . import bayes, benchmarks, datasets, draw, preprocess
 from .auto import AutoReport, AutoResult, infer
+from .backbone import (
+    BackboneResult,
+    BackboneSettings,
+    backbone_from_rates,
+    infer_backbone,
+    orient_backbone,
+    rate_scaling,
+)
 from .channels import ChannelLayer, ChannelSettings, infer_channels
 from .checkpoint import Checkpoint
 from .compare import NetworkComparison, compare_networks
@@ -26,6 +38,7 @@ from .network_model import NetworkModel
 from .parallel import dask_map, thread_map
 from .preprocess import preprocess as run_preprocess
 from .selection import SkeletonSettings, infer_skeleton, select_parents
+from .spectral import SpectralResult, SpectralSettings, conditional_coherence, rates_from_spectrum, spectral_rates
 from .stats import (
     SurrogateTest,
     benjamini_hochberg,

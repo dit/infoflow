@@ -17,6 +17,7 @@ from .measures import DEFAULT_LAYER_ESTIMATOR
 from .selection import SkeletonSettings, _cmi, _Columns, infer_skeleton
 
 if TYPE_CHECKING:
+    from .backbone import BackboneResult
     from .channels import ChannelLayer
     from .machines import MachineLayer
 
@@ -62,6 +63,9 @@ class MultiplexNetwork:
     channels : ChannelLayer, None
         A discrete memoryless channel per edge with its mutual information and
         capacity (:func:`~infoflow.channels.infer_channels`), when requested.
+    backbone : BackboneResult, None
+        Separate precomputed spectral structural evidence. Its neighbors guide the
+        lagged parent search; its p-values/rates never replace flow-layer statistics.
     """
 
     dataset: xr.Dataset
@@ -72,6 +76,7 @@ class MultiplexNetwork:
     hyperedges: xr.Dataset | None = None
     machines: "MachineLayer | None" = None
     channels: "ChannelLayer | None" = None
+    backbone: "BackboneResult | None" = None
 
     @property
     def names(self):
@@ -157,6 +162,8 @@ class MultiplexNetwork:
             lines += ["", self.machines.summary()]
         if self.channels is not None:
             lines += ["", self.channels.summary()]
+        if self.backbone is not None:
+            lines += ["", self.backbone.summary()]
         return "\n".join(lines)
 
 
@@ -291,6 +298,8 @@ def infer_multiplex(
     channel_settings=None,
     directed_information=False,
     prng=None,
+    *,
+    backbone=None,
 ):
     """
     Infer a multiplex information-flow network.
@@ -396,6 +405,13 @@ def infer_multiplex(
         transfer entropy and instantaneous exchange :cite:`Massey1990,Amblard2013`.
         ``di`` is NaN where the transfer entropy was not estimated.
     prng : None, int, Generator
+    backbone : BackboneResult, None
+        Optional precomputed spectral backbone from independent discovery data.
+        Requires its explicit forest-model acknowledgment and matching names/order.
+        Neighbors (including numerically unresolved pairs) are offered as source
+        processes in both directions, but ordinary lag selection and TE/layer tests
+        still decide their predictive contributions. TDMI screening remains all-pair.
+        ``holdout`` does not undo earlier discovery on its held-out observations.
 
     Returns
     -------
@@ -409,6 +425,29 @@ def infer_multiplex(
     discrete, chosen, report = _as_discrete(data, names, preprocess, max_lag, rng)
     names = discrete.names if names is None else list(names)
     discrete.names = names
+    candidates, discovery_reuse = None, False
+    if backbone is not None:
+        import warnings
+
+        from .backbone import BackboneResult
+        from .spectral import _fingerprints
+
+        if not isinstance(backbone, BackboneResult):
+            raise TypeError("backbone must be a precomputed BackboneResult")
+        if (
+            backbone.names != names
+            or list(backbone.dataset.source.values) != names
+            or list(backbone.dataset.target.values) != names
+        ):
+            raise ValueError("backbone process names and order must match the analysis data")
+        candidates = backbone.candidate_sources()
+        if discrete.raw is not None:
+            discovery_reuse = bool(set(_fingerprints(discrete.raw)) & set(backbone.rates.data_fingerprints))
+        if discovery_reuse:
+            warnings.warn(
+                "analysis reuses exact discovery trials; holdout does not make the spectral screen independent",
+                stacklevel=2,
+            )
     if embeddings is None:
         embeddings = chosen if chosen is not None else Embedding(max_lag=max_lag or 3)
     settings = skeleton_settings or SkeletonSettings()
@@ -428,7 +467,46 @@ def infer_multiplex(
 
         settings = dataclasses.replace(settings, device=device)
     selection_data, estimation_data = (discrete, discrete) if holdout is None else discrete.split_time(holdout)
-    skeleton = infer_skeleton(selection_data, embeddings, targets, settings, rng, map_fn=map_fn, checkpoint=checkpoint)
+    if candidates is not None and checkpoint is not None:
+        checkpoint = checkpoint.scoped(
+            (
+                "backbone",
+                discrete,
+                names,
+                embeddings,
+                settings,
+                candidates,
+                targets,
+                estimator,
+                alpha,
+                fdr_dependent,
+                n_boot,
+                n_null,
+                adaptive_resamples,
+                max_resamples,
+                holdout,
+                layer_symbols,
+                layer_method,
+                bayes_threshold,
+                include_shared_candidates,
+                rng.bit_generator.state,
+            )
+        )
+    if candidates is None:
+        skeleton = infer_skeleton(
+            selection_data, embeddings, targets, settings, rng, map_fn=map_fn, checkpoint=checkpoint
+        )
+    else:
+        skeleton = infer_skeleton(
+            selection_data,
+            embeddings,
+            targets,
+            settings,
+            rng,
+            map_fn=map_fn,
+            checkpoint=checkpoint,
+            candidate_sources=candidates,
+        )
 
     jobs = []
     for t, sk in skeleton.items():
@@ -486,7 +564,10 @@ def infer_multiplex(
                 bayes_threshold=bayes_threshold,
             )
 
-        stats, delay = compute() if checkpoint is None else checkpoint.cached(f"edge-{p}-{t}-{kind}", compute)
+        key = f"edge-{p}-{t}-{kind}"
+        if candidates is not None and checkpoint is not None:
+            key += f"-{checkpoint.fingerprint((x_vars, w_vars))}"
+        stats, delay = compute() if checkpoint is None else checkpoint.cached(key, compute)
         return (p, t), (stats, delay, kind)
 
     results = dict(map_fn(run, zip(jobs, seeds)))
@@ -503,7 +584,12 @@ def infer_multiplex(
         roles, explained = edge_roles(selection_data, skeleton, embeddings, settings, prng=rng)
         edges_run = set(results)
         shared_kind, shared_by = explain_shared(estimation_data, skeleton, edges_run, dataset, prng=rng)
-        unset = (roles == "") & (shared_kind != "") & (shared_kind != "unexplained") & (shared_kind != "target-history")
+        unset = (
+            ((roles == "") | (roles == "not-tested"))
+            & (shared_kind != "")
+            & (shared_kind != "unexplained")
+            & (shared_kind != "target-history")
+        )
         roles = np.where(unset, shared_kind, roles)
         explained = np.where(unset, shared_by, explained)
         dataset["role"] = (("source", "target"), roles)
@@ -568,6 +654,31 @@ def infer_multiplex(
         "machines": machines,
         "channels": channels,
     }
+    if backbone is not None:
+        assert candidates is not None
+        selected = dataset["kind"].values == "parent"
+        allowed = np.zeros_like(selected)
+        for t, sources in candidates.items():
+            allowed[sources, t] = True
+        supported = backbone.dataset.detected.values
+        dims = ("source", "target")
+        dataset["parent_candidate"] = (dims, allowed)
+        dataset["backbone_detected"] = (dims, supported.copy())
+        dataset["backbone_te_confirmed"] = (dims, supported & selected)
+        dataset["backbone_unconfirmed"] = (dims, supported & ~(selected | selected.T))
+        dataset["backbone_direction_disagreement"] = (
+            dims,
+            (backbone.dataset.orientation.values == 1) & selected.T & ~selected,
+        )
+        provenance["discovery"] = {
+            "method": backbone.settings.get("method"),
+            "candidate_sources": candidates,
+            "spectral_settings": dict(backbone.rates.settings),
+            "backbone_settings": dict(backbone.settings),
+            "exact_discovery_trials_reused": discovery_reuse,
+            "independence": "caller-managed; absence of exact trial matches does not prove disjoint observations",
+            "warnings": backbone.warnings,
+        }
     network = MultiplexNetwork(
         dataset=dataset,
         skeleton=skeleton,
@@ -575,6 +686,7 @@ def infer_multiplex(
         settings=provenance,
         report=report,
         hyperedges=pid,
+        backbone=backbone,
     )
     if machines:
         from .machines import infer_machines
