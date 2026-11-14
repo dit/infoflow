@@ -79,6 +79,11 @@ def edge_roles(data, skeleton, embeddings, settings, prng=None):
             continue
         perm = _permuter(cols, settings, rng)
         for p in others:
+            scope = getattr(sk, "candidate_sources", None)
+            if scope is not None and p not in scope:
+                # A discovery constraint is not a conditional-independence result.
+                roles[p, t] = "not-tested"
+                continue
             if p in parents[t]:
                 roles[p, t] = "direct"
                 continue

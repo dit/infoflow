@@ -7,6 +7,12 @@ Network inference
 .. automodule:: infoflow.network
 .. automodule:: infoflow.auto
 
+Spectral rates and structural backbones
+---------------------------------------
+
+.. automodule:: infoflow.spectral
+.. automodule:: infoflow.backbone
+
 Data
 ----
 

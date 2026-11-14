@@ -249,6 +249,7 @@ class TargetSkeleton:
     admitted_by: dict = field(default_factory=dict)
     timing: dict = field(default_factory=dict)
     source_scores: dict = field(default_factory=dict)
+    candidate_sources: list | None = None
 
     def parents(self):
         """
@@ -1560,7 +1561,33 @@ class _EnsembleStages:
         return {p: max(d[p] for d in per) for p in per[0]}
 
 
-def select_parents(data, target, embeddings=None, sources=None, settings=None, prng=None):
+def _source_processes(values, target, P):
+    """Validate an explicit process family without changing its iteration order."""
+    out = list(values)
+    if any(
+        isinstance(p, (bool, np.bool_)) or not isinstance(p, (int, np.integer)) or not 0 <= p < P or p == target
+        for p in out
+    ):
+        raise ValueError("candidate sources must be valid nonself process indices")
+    return list(dict.fromkeys(int(p) for p in out))
+
+
+def _candidate_map(candidate_sources, targets, P):
+    if candidate_sources is None:
+        return None
+    if not isinstance(candidate_sources, dict) or any(t not in candidate_sources for t in targets):
+        raise ValueError("candidate_sources must provide a source list for every requested target")
+    if any(
+        isinstance(t, (bool, np.bool_)) or not isinstance(t, (int, np.integer)) or not 0 <= t < P
+        for t in candidate_sources
+    ):
+        raise ValueError("candidate_sources keys must be valid target indices")
+    return {int(t): sorted(_source_processes(values, t, P)) for t, values in candidate_sources.items()}
+
+
+def select_parents(
+    data, target, embeddings=None, sources=None, settings=None, prng=None, *, tdmi_sources=None, faes_sources=None
+):
     """
     Select the target's past and its source parents.
 
@@ -1574,6 +1601,11 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         Candidate source processes (default: all others).
     settings : SkeletonSettings, None
     prng : None, int, Generator
+    tdmi_sources : list of int, None
+        Optional separate TDMI-screen family; None retains the historical scope
+        of ``sources``. A constrained network route uses all nonself processes.
+    faes_sources : list of int, None
+        Optional scope of lag-0 Faes conditionals, independent of the source mask.
 
     Returns
     -------
@@ -1584,7 +1616,10 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     rng = as_generator(prng)
     embeddings = embeddings or Embedding()
     P = data.n_processes
-    sources = [p for p in range(P) if p != target] if sources is None else list(sources)
+    constrained = sources is not None
+    sources = [p for p in range(P) if p != target] if sources is None else _source_processes(sources, target, P)
+    tdmi_sources = sources if tdmi_sources is None else _source_processes(tdmi_sources, target, P)
+    faes_sources = sources if faes_sources is None else _source_processes(faes_sources, target, P)
     # Coupling delays can exceed a source's own memory, so source lags extend to
     # max_source_lag (IDTxl's max_lag_sources; default the larger of 5 and the largest
     # lag budget in the network), on each source's own grid.
@@ -1597,10 +1632,15 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     else:
         target_cands = [(target, lag) for lag in candidate_lags(data, embeddings, target)]
     source_cands = [(p, lag) for p in sources for lag in _source_lags(data, embeddings, p, source_max)]
+    tdmi_cands = (
+        [(p, lag) for p in tdmi_sources for lag in _source_lags(data, embeddings, p, source_max)]
+        if settings.tdmi_screen
+        else []
+    )
     conditionals = [tuple(v) for v in settings.forced_conditionals]
     if settings.faes:
-        conditionals += [(p, 0) for p in sources if (p, 0) not in conditionals]
-    everything = list(dict.fromkeys(target_cands + source_cands + conditionals))
+        conditionals += [(p, 0) for p in faes_sources if (p, 0) not in conditionals]
+    everything = list(dict.fromkeys(target_cands + source_cands + conditionals + tdmi_cands))
     max_lag = max(v[1] for v in everything) if everything else 0
     started = time.perf_counter()
     members, built = [], {}
@@ -1610,7 +1650,12 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
         members.append(_SingleStages(name, cols, _make_perm(cols, settings, rng), settings))
         built[name] = time.perf_counter() - t0
     stages = members[0] if len(members) == 1 else _EnsembleStages(members, settings)
-    result = TargetSkeleton(target=target, conditionals=conditionals, n_samples=stages.n)
+    result = TargetSkeleton(
+        target=target,
+        conditionals=conditionals,
+        n_samples=stages.n,
+        candidate_sources=list(sources) if constrained else None,
+    )
     if stages.n < 10:
         return result
     past = stages.greedy(target_cands, conditionals)
@@ -1674,10 +1719,10 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
 
     if settings.tdmi_screen:
         parents = {p for p, _ in result.sources}
-        for p in sources:
+        for p in tdmi_sources:
             if p in parents:
                 continue
-            cands = [v for v in all_source_cands if v[0] == p]
+            cands = [v for v in tdmi_cands if v[0] == p]
             best, value, pv = stages.tdmi(cands)
             result.tdmi_candidates[p] = {"variable": best, "tdmi": value, "pvalue": pv}
     if isinstance(stages, _EnsembleStages):
@@ -1687,7 +1732,17 @@ def select_parents(data, target, embeddings=None, sources=None, settings=None, p
     return result
 
 
-def infer_skeleton(data, embeddings=None, targets=None, settings=None, prng=None, map_fn=map, checkpoint=None):
+def infer_skeleton(
+    data,
+    embeddings=None,
+    targets=None,
+    settings=None,
+    prng=None,
+    map_fn=map,
+    checkpoint=None,
+    *,
+    candidate_sources=None,
+):
     """
     Skeletons for all targets, with network-level FDR on the omnibus tests.
 
@@ -1703,6 +1758,11 @@ def infer_skeleton(data, embeddings=None, targets=None, settings=None, prng=None
         A ``map``-like function over targets (e.g. a dask or process-pool map).
     checkpoint : Checkpoint, None
         Reuse and store per-target results.
+    candidate_sources : dict, None
+        Optional target-index -> candidate source indices. Every requested target
+        must be present; an empty list means target history only. TDMI screening
+        and Faes conditioning still see all nonself processes. This screen must be
+        learned independently for the usual downstream test interpretation.
 
     Returns
     -------
@@ -1714,13 +1774,30 @@ def infer_skeleton(data, embeddings=None, targets=None, settings=None, prng=None
     settings = settings or SkeletonSettings()
     rng = as_generator(prng)
     targets = list(range(data.n_processes)) if targets is None else list(targets)
+    candidates = _candidate_map(candidate_sources, targets, data.n_processes)
+    if candidates is not None and checkpoint is not None:
+        checkpoint = checkpoint.scoped(
+            ("candidates", data, embeddings, targets, settings, candidates, rng.bit_generator.state)
+        )
     seeds = rng.integers(0, 2**32, size=len(targets))
 
     def run(args):
         target, seed = args
 
         def compute():
-            return select_parents(data, target, embeddings, None, settings, int(seed))
+            if candidates is None:
+                return select_parents(data, target, embeddings, None, settings, int(seed))
+            others = [p for p in range(data.n_processes) if p != target]
+            return select_parents(
+                data,
+                target,
+                embeddings,
+                candidates[target],
+                settings,
+                int(seed),
+                tdmi_sources=others,
+                faes_sources=others,
+            )
 
         return compute() if checkpoint is None else checkpoint.cached(f"skeleton-{target}", compute)
 

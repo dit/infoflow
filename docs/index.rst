@@ -32,6 +32,8 @@ and false-discovery-rate control.
    preprocessing
    spikes
    skeleton
+   spectral
+   backbone
    interpretation
    hyperedges
    machines

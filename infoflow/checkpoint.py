@@ -3,6 +3,7 @@ Checkpointing for long analyses: results are written as they complete and reused
 """
 
 import pickle
+from hashlib import sha256
 from pathlib import Path
 
 __all__ = ("Checkpoint",)
@@ -21,6 +22,20 @@ class Checkpoint:
     def __init__(self, directory):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def fingerprint(value):
+        """Identify a trusted, pickleable analysis configuration and its data."""
+        return sha256(pickle.dumps(value, protocol=5)).hexdigest()[:24]
+
+    def scoped(self, configuration):
+        """
+        A separate cache namespace for a candidate-guided analysis.
+
+        Include actual input data, split/candidate definitions, settings and RNG
+        state. Legacy unrestricted keys are intentionally not read in this scope.
+        """
+        return Checkpoint(self.directory / f"guided-{self.fingerprint(configuration)}")
 
     def _path(self, key):
         return self.directory / f"{key}.pkl"

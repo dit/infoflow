@@ -1,0 +1,5639 @@
+{
+  "created": "2026-11-14T17:24:28.418369+00:00",
+  "python": "3.14.7",
+  "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "versions": {
+    "infoflow": "0.1.0.dev113+g4558d2ffc",
+    "dit": "2.4.dev54+g6314d14e3",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1"
+  },
+  "configuration": {
+    "n": 4096,
+    "reps": 20,
+    "ratios": [
+      2.0,
+      5.0,
+      10.0,
+      20.0
+    ],
+    "nperseg": 128,
+    "backbone": {
+      "n_null": 99,
+      "alpha": 0.1,
+      "dependent": true
+    }
+  },
+  "limitations": [
+    "Fitted Gaussian tests are approximate and model/regime specific.",
+    "Finite sampled predictive and continuous generating structural graphs differ.",
+    "Rates are biased plug-in spectral estimates; nulls, not positivity, determine detections.",
+    "RSS is the process-wide high-water mark, not per-case memory use."
+  ],
+  "calibration": {
+    "summary": {
+      "independent": {
+        "replications": 20,
+        "estimable_null_tests": 20,
+        "null_component": "pvalue",
+        "component_rejections": 3,
+        "component_rejection_interval_95": [
+          0.032070937185463715,
+          0.3789268265453139
+        ],
+        "families_with_false_edges": 3,
+        "false_discovery_rate_estimate": 0.15,
+        "fdp_standard_error": 0.08191780219091253,
+        "nominal_alpha": 0.1
+      },
+      "common_driver": {
+        "replications": 20,
+        "estimable_null_tests": 20,
+        "null_component": "conditional_pvalue",
+        "component_rejections": 2,
+        "component_rejection_interval_95": [
+          0.012348527170294804,
+          0.3169827140190823
+        ],
+        "families_with_false_edges": 1,
+        "false_discovery_rate_estimate": 0.016666666666666666,
+        "fdp_standard_error": 0.016666666666666666,
+        "nominal_alpha": 0.1
+      },
+      "chain": {
+        "replications": 20,
+        "estimable_null_tests": 20,
+        "null_component": "conditional_pvalue",
+        "component_rejections": 1,
+        "component_rejection_interval_95": [
+          0.001265089497949805,
+          0.2487327627720277
+        ],
+        "families_with_false_edges": 0,
+        "false_discovery_rate_estimate": 0.0,
+        "fdp_standard_error": 0.0,
+        "nominal_alpha": 0.1
+      },
+      "collider": {
+        "replications": 20,
+        "estimable_null_tests": 20,
+        "null_component": "marginal_pvalue",
+        "component_rejections": 0,
+        "component_rejection_interval_95": [
+          0.0,
+          0.1684334709830853
+        ],
+        "families_with_false_edges": 0,
+        "false_discovery_rate_estimate": 0.0,
+        "fdp_standard_error": 0.0,
+        "nominal_alpha": 0.1
+      }
+    },
+    "records": [
+      {
+        "seed": 0,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.1624231250025332,
+        "process_peak_rss_bytes": 197541888,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.22
+      },
+      {
+        "seed": 1,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.150326082999527,
+        "process_peak_rss_bytes": 197574656,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.93
+      },
+      {
+        "seed": 2,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.13960504100396065,
+        "process_peak_rss_bytes": 197607424,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.64
+      },
+      {
+        "seed": 3,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.13200983299611835,
+        "process_peak_rss_bytes": 197623808,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.39
+      },
+      {
+        "seed": 4,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.1342217920027906,
+        "process_peak_rss_bytes": 197656576,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.81
+      },
+      {
+        "seed": 5,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.14674754199950257,
+        "process_peak_rss_bytes": 197705728,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 1,
+        "truth_edges": 0,
+        "detected_edges": 1,
+        "recall": null,
+        "precision": 0.0,
+        "false_discovery_proportion": 1.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.04
+      },
+      {
+        "seed": 6,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.14544783400197048,
+        "process_peak_rss_bytes": 197705728,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.21
+      },
+      {
+        "seed": 7,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.14311433299735654,
+        "process_peak_rss_bytes": 197869568,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.75
+      },
+      {
+        "seed": 8,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.149091416002193,
+        "process_peak_rss_bytes": 197869568,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.86
+      },
+      {
+        "seed": 9,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.1341292080032872,
+        "process_peak_rss_bytes": 197869568,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.29
+      },
+      {
+        "seed": 10,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.1733643750048941,
+        "process_peak_rss_bytes": 197885952,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.78
+      },
+      {
+        "seed": 11,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.15156250000291038,
+        "process_peak_rss_bytes": 197885952,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.16
+      },
+      {
+        "seed": 12,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.13901395900029456,
+        "process_peak_rss_bytes": 197885952,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.83
+      },
+      {
+        "seed": 13,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.14171362500201212,
+        "process_peak_rss_bytes": 197885952,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.24
+      },
+      {
+        "seed": 14,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.14192316600383492,
+        "process_peak_rss_bytes": 197885952,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.12
+      },
+      {
+        "seed": 15,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.16962237499683397,
+        "process_peak_rss_bytes": 197885952,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.88
+      },
+      {
+        "seed": 16,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.13192704100219999,
+        "process_peak_rss_bytes": 197885952,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.91
+      },
+      {
+        "seed": 17,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.14524295800219988,
+        "process_peak_rss_bytes": 197885952,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 1,
+        "truth_edges": 0,
+        "detected_edges": 1,
+        "recall": null,
+        "precision": 0.0,
+        "false_discovery_proportion": 1.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.08
+      },
+      {
+        "seed": 18,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.15988020799704827,
+        "process_peak_rss_bytes": 197885952,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 1,
+        "truth_edges": 0,
+        "detected_edges": 1,
+        "recall": null,
+        "precision": 0.0,
+        "false_discovery_proportion": 1.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.07
+      },
+      {
+        "seed": 19,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.1600056660026894,
+        "process_peak_rss_bytes": 197902336,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 0,
+        "false_positive": 0,
+        "truth_edges": 0,
+        "detected_edges": 0,
+        "recall": null,
+        "precision": null,
+        "false_discovery_proportion": 0.0,
+        "model": "independent",
+        "null_component": "pvalue",
+        "null_pvalue": 0.65
+      },
+      {
+        "seed": 0,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.9407554999997956,
+        "process_peak_rss_bytes": 200032256,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.75
+      },
+      {
+        "seed": 1,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8807681250036694,
+        "process_peak_rss_bytes": 200130560,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.17
+      },
+      {
+        "seed": 2,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.9100778339998215,
+        "process_peak_rss_bytes": 200130560,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.83
+      },
+      {
+        "seed": 3,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8985032500058878,
+        "process_peak_rss_bytes": 200130560,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": false,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Detected undirected cycles conflict with the forest reconstruction theorem; no tree is forced.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 1,
+        "truth_edges": 2,
+        "detected_edges": 3,
+        "recall": 1.0,
+        "precision": 0.6666666666666666,
+        "false_discovery_proportion": 0.3333333333333333,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.01
+      },
+      {
+        "seed": 4,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.9014532919973135,
+        "process_peak_rss_bytes": 200294400,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.57
+      },
+      {
+        "seed": 5,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.9139389580013813,
+        "process_peak_rss_bytes": 200294400,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.1
+      },
+      {
+        "seed": 6,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8848677909991238,
+        "process_peak_rss_bytes": 200294400,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.84
+      },
+      {
+        "seed": 7,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8918228340044152,
+        "process_peak_rss_bytes": 200294400,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.54
+      },
+      {
+        "seed": 8,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8815483750004205,
+        "process_peak_rss_bytes": 200359936,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.12
+      },
+      {
+        "seed": 9,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8871432089945301,
+        "process_peak_rss_bytes": 200359936,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.74
+      },
+      {
+        "seed": 10,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.9387067080024281,
+        "process_peak_rss_bytes": 200359936,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.11
+      },
+      {
+        "seed": 11,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8855730419963947,
+        "process_peak_rss_bytes": 200359936,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.65
+      },
+      {
+        "seed": 12,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8811734589980915,
+        "process_peak_rss_bytes": 200359936,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.84
+      },
+      {
+        "seed": 13,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.876427249997505,
+        "process_peak_rss_bytes": 200359936,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.48
+      },
+      {
+        "seed": 14,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8730586250021588,
+        "process_peak_rss_bytes": 200359936,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.47
+      },
+      {
+        "seed": 15,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8863717920030467,
+        "process_peak_rss_bytes": 200359936,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.99
+      },
+      {
+        "seed": 16,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8969692919999943,
+        "process_peak_rss_bytes": 200359936,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.73
+      },
+      {
+        "seed": 17,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.87902020799811,
+        "process_peak_rss_bytes": 200359936,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.65
+      },
+      {
+        "seed": 18,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.879280374996597,
+        "process_peak_rss_bytes": 200359936,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.6
+      },
+      {
+        "seed": 19,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8889215419985703,
+        "process_peak_rss_bytes": 200359936,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "common_driver",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.45
+      },
+      {
+        "seed": 0,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.872284666998894,
+        "process_peak_rss_bytes": 200376320,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.17
+      },
+      {
+        "seed": 1,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.9154419160040561,
+        "process_peak_rss_bytes": 200376320,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.69
+      },
+      {
+        "seed": 2,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8877618749975227,
+        "process_peak_rss_bytes": 200376320,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.46
+      },
+      {
+        "seed": 3,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8590004580037203,
+        "process_peak_rss_bytes": 200376320,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.74
+      },
+      {
+        "seed": 4,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8693529170050169,
+        "process_peak_rss_bytes": 200376320,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.81
+      },
+      {
+        "seed": 5,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8607300840012613,
+        "process_peak_rss_bytes": 200376320,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.96
+      },
+      {
+        "seed": 6,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8347682500025257,
+        "process_peak_rss_bytes": 200376320,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.36
+      },
+      {
+        "seed": 7,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8546204169979319,
+        "process_peak_rss_bytes": 200376320,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.42
+      },
+      {
+        "seed": 8,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8180908750000526,
+        "process_peak_rss_bytes": 200376320,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.82
+      },
+      {
+        "seed": 9,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8154441250007949,
+        "process_peak_rss_bytes": 200376320,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.58
+      },
+      {
+        "seed": 10,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8149930840008892,
+        "process_peak_rss_bytes": 200376320,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.59
+      },
+      {
+        "seed": 11,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8393006249971222,
+        "process_peak_rss_bytes": 200376320,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.33
+      },
+      {
+        "seed": 12,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8261437499968451,
+        "process_peak_rss_bytes": 200556544,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.81
+      },
+      {
+        "seed": 13,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8464905830041971,
+        "process_peak_rss_bytes": 200556544,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.15
+      },
+      {
+        "seed": 14,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.813928625000699,
+        "process_peak_rss_bytes": 200556544,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.46
+      },
+      {
+        "seed": 15,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8049440830000094,
+        "process_peak_rss_bytes": 200556544,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 1.0
+      },
+      {
+        "seed": 16,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8045054579997668,
+        "process_peak_rss_bytes": 200556544,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.09
+      },
+      {
+        "seed": 17,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8072603330001584,
+        "process_peak_rss_bytes": 200556544,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.29
+      },
+      {
+        "seed": 18,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8036293750046752,
+        "process_peak_rss_bytes": 200556544,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.72
+      },
+      {
+        "seed": 19,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.842416499996034,
+        "process_peak_rss_bytes": 200556544,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "chain",
+        "null_component": "conditional_pvalue",
+        "null_pvalue": 0.87
+      },
+      {
+        "seed": 0,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8179129170021042,
+        "process_peak_rss_bytes": 200556544,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.19
+      },
+      {
+        "seed": 1,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8092875420043129,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.25
+      },
+      {
+        "seed": 2,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.7937722499991651,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.37
+      },
+      {
+        "seed": 3,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.787612291998812,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.18
+      },
+      {
+        "seed": 4,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.7935756250008126,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.27
+      },
+      {
+        "seed": 5,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8330285830015782,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.53
+      },
+      {
+        "seed": 6,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.7927641669957666,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.4
+      },
+      {
+        "seed": 7,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.7908940000052098,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.66
+      },
+      {
+        "seed": 8,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.7975227499991888,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.96
+      },
+      {
+        "seed": 9,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8108500840025954,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.83
+      },
+      {
+        "seed": 10,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8073806250031339,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.35
+      },
+      {
+        "seed": 11,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.824941332997696,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.45
+      },
+      {
+        "seed": 12,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8317885840006056,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.87
+      },
+      {
+        "seed": 13,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8169735000046785,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.29
+      },
+      {
+        "seed": 14,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8124221249963739,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.17
+      },
+      {
+        "seed": 15,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.808726959003252,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.59
+      },
+      {
+        "seed": 16,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8048490840010345,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.96
+      },
+      {
+        "seed": 17,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8153546250032377,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.35
+      },
+      {
+        "seed": 18,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8246179999987362,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.47
+      },
+      {
+        "seed": 19,
+        "n": 4096,
+        "fs": 2,
+        "timescales": [
+          1.0,
+          2.0,
+          4.0
+        ],
+        "nperseg": 128,
+        "shrinkage": 0,
+        "seconds": 0.8099181669967948,
+        "process_peak_rss_bytes": 200572928,
+        "unresolved_pairs": 0,
+        "resolved_arrows": 0,
+        "detected_graph_is_forest": true,
+        "warnings": [
+          "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+          "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+        ],
+        "true_positive": 2,
+        "false_positive": 0,
+        "truth_edges": 2,
+        "detected_edges": 2,
+        "recall": 1.0,
+        "precision": 1.0,
+        "false_discovery_proportion": 0.0,
+        "model": "collider",
+        "null_component": "marginal_pvalue",
+        "null_pvalue": 0.44
+      }
+    ]
+  },
+  "motifs": [
+    {
+      "seed": 100,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8064250419993186,
+      "process_peak_rss_bytes": 200572928,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 0,
+      "ratio": 2.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 512.0,
+      "segment_duration_over_slowest_tau": 16.0,
+      "marginal_rate_mae_bits_per_time": 0.017962556314731353,
+      "conditional_rate_mae_bits_per_time": 0.023883684067814725
+    },
+    {
+      "seed": 101,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8088447500049369,
+      "process_peak_rss_bytes": 200687616,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 1,
+      "ratio": 2.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 512.0,
+      "segment_duration_over_slowest_tau": 16.0,
+      "marginal_rate_mae_bits_per_time": 0.020927876145177233,
+      "conditional_rate_mae_bits_per_time": 0.02239926743671958
+    },
+    {
+      "seed": 102,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8075207909932942,
+      "process_peak_rss_bytes": 200687616,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 2,
+      "ratio": 2.0,
+      "edges": [
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 512.0,
+      "segment_duration_over_slowest_tau": 16.0,
+      "marginal_rate_mae_bits_per_time": 0.02865557807338091,
+      "conditional_rate_mae_bits_per_time": 0.029029366625181463
+    },
+    {
+      "seed": 103,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8211453749972861,
+      "process_peak_rss_bytes": 200687616,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 3,
+      "ratio": 2.0,
+      "edges": [
+        [
+          0,
+          2
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "duration_over_slowest_tau": 512.0,
+      "segment_duration_over_slowest_tau": 16.0,
+      "marginal_rate_mae_bits_per_time": 0.02426108805394789,
+      "conditional_rate_mae_bits_per_time": 0.032899555076312904
+    },
+    {
+      "seed": 104,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8364237089990638,
+      "process_peak_rss_bytes": 200687616,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 4,
+      "ratio": 2.0,
+      "edges": [
+        [
+          2,
+          1
+        ],
+        [
+          1,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 512.0,
+      "segment_duration_over_slowest_tau": 16.0,
+      "marginal_rate_mae_bits_per_time": 0.03207748494052542,
+      "conditional_rate_mae_bits_per_time": 0.026376789457766243
+    },
+    {
+      "seed": 105,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8300335829990217,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 5,
+      "ratio": 2.0,
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 512.0,
+      "segment_duration_over_slowest_tau": 16.0,
+      "marginal_rate_mae_bits_per_time": 0.02203552644608826,
+      "conditional_rate_mae_bits_per_time": 0.023984035780486385
+    },
+    {
+      "seed": 106,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8074209170008544,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 6,
+      "ratio": 2.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "duration_over_slowest_tau": 512.0,
+      "segment_duration_over_slowest_tau": 16.0,
+      "marginal_rate_mae_bits_per_time": 0.021261971142332272,
+      "conditional_rate_mae_bits_per_time": 0.022501282670068984
+    },
+    {
+      "seed": 107,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8151483749970794,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 7,
+      "ratio": 2.0,
+      "edges": [
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 512.0,
+      "segment_duration_over_slowest_tau": 16.0,
+      "marginal_rate_mae_bits_per_time": 0.02804104458257659,
+      "conditional_rate_mae_bits_per_time": 0.03341668725870759
+    },
+    {
+      "seed": 108,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8490297919997829,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 8,
+      "ratio": 2.0,
+      "edges": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 512.0,
+      "segment_duration_over_slowest_tau": 16.0,
+      "marginal_rate_mae_bits_per_time": 0.02361341207083724,
+      "conditional_rate_mae_bits_per_time": 0.021240361686663944
+    },
+    {
+      "seed": 109,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8415485000004992,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 9,
+      "ratio": 2.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 512.0,
+      "segment_duration_over_slowest_tau": 16.0,
+      "marginal_rate_mae_bits_per_time": 0.03502908310654062,
+      "conditional_rate_mae_bits_per_time": 0.024148248642040477
+    },
+    {
+      "seed": 110,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8389034159990842,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 10,
+      "ratio": 2.0,
+      "edges": [
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 512.0,
+      "segment_duration_over_slowest_tau": 16.0,
+      "marginal_rate_mae_bits_per_time": 0.030301398180360723,
+      "conditional_rate_mae_bits_per_time": 0.021818030281570904
+    },
+    {
+      "seed": 111,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8113711249970947,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 11,
+      "ratio": 2.0,
+      "edges": [
+        [
+          2,
+          0
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "duration_over_slowest_tau": 512.0,
+      "segment_duration_over_slowest_tau": 16.0,
+      "marginal_rate_mae_bits_per_time": 0.04259942135909234,
+      "conditional_rate_mae_bits_per_time": 0.03148919074940678
+    },
+    {
+      "seed": 100,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        5.0,
+        25.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8087208750002901,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 0,
+      "ratio": 5.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 81.92,
+      "segment_duration_over_slowest_tau": 2.56,
+      "marginal_rate_mae_bits_per_time": 0.02132810468594948,
+      "conditional_rate_mae_bits_per_time": 0.02234298207208284
+    },
+    {
+      "seed": 101,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        5.0,
+        25.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7888043749990175,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 1,
+      "ratio": 5.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 81.92,
+      "segment_duration_over_slowest_tau": 2.56,
+      "marginal_rate_mae_bits_per_time": 0.014865464866152492,
+      "conditional_rate_mae_bits_per_time": 0.019191912166434837
+    },
+    {
+      "seed": 102,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        5.0,
+        25.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8129752079985337,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 2,
+      "ratio": 5.0,
+      "edges": [
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 81.92,
+      "segment_duration_over_slowest_tau": 2.56,
+      "marginal_rate_mae_bits_per_time": 0.027535134783866575,
+      "conditional_rate_mae_bits_per_time": 0.02862866148210246
+    },
+    {
+      "seed": 103,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        5.0,
+        25.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8926929590015789,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 3,
+      "ratio": 5.0,
+      "edges": [
+        [
+          0,
+          2
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "duration_over_slowest_tau": 81.92,
+      "segment_duration_over_slowest_tau": 2.56,
+      "marginal_rate_mae_bits_per_time": 0.026467204679545598,
+      "conditional_rate_mae_bits_per_time": 0.028745294633200757
+    },
+    {
+      "seed": 104,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        5.0,
+        25.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8726787499981583,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 4,
+      "ratio": 5.0,
+      "edges": [
+        [
+          2,
+          1
+        ],
+        [
+          1,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 81.92,
+      "segment_duration_over_slowest_tau": 2.56,
+      "marginal_rate_mae_bits_per_time": 0.012950359836680574,
+      "conditional_rate_mae_bits_per_time": 0.023565273305859735
+    },
+    {
+      "seed": 105,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        5.0,
+        25.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8654770409993944,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 5,
+      "ratio": 5.0,
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 81.92,
+      "segment_duration_over_slowest_tau": 2.56,
+      "marginal_rate_mae_bits_per_time": 0.018608383396121527,
+      "conditional_rate_mae_bits_per_time": 0.019877321023086463
+    },
+    {
+      "seed": 106,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        5.0,
+        25.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8351565420016414,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 6,
+      "ratio": 5.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "duration_over_slowest_tau": 81.92,
+      "segment_duration_over_slowest_tau": 2.56,
+      "marginal_rate_mae_bits_per_time": 0.01812565132059323,
+      "conditional_rate_mae_bits_per_time": 0.018421659138522884
+    },
+    {
+      "seed": 107,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        5.0,
+        25.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8259547499983455,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 7,
+      "ratio": 5.0,
+      "edges": [
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 81.92,
+      "segment_duration_over_slowest_tau": 2.56,
+      "marginal_rate_mae_bits_per_time": 0.028081352382115187,
+      "conditional_rate_mae_bits_per_time": 0.032437857039385475
+    },
+    {
+      "seed": 108,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        5.0,
+        25.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8277069169998867,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 8,
+      "ratio": 5.0,
+      "edges": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 81.92,
+      "segment_duration_over_slowest_tau": 2.56,
+      "marginal_rate_mae_bits_per_time": 0.0198350829640993,
+      "conditional_rate_mae_bits_per_time": 0.022450727961237562
+    },
+    {
+      "seed": 109,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        5.0,
+        25.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.822643125000468,
+      "process_peak_rss_bytes": 200704000,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 9,
+      "ratio": 5.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 81.92,
+      "segment_duration_over_slowest_tau": 2.56,
+      "marginal_rate_mae_bits_per_time": 0.030900154442719503,
+      "conditional_rate_mae_bits_per_time": 0.027311369146993808
+    },
+    {
+      "seed": 110,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        5.0,
+        25.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8325594170019031,
+      "process_peak_rss_bytes": 200720384,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 10,
+      "ratio": 5.0,
+      "edges": [
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 81.92,
+      "segment_duration_over_slowest_tau": 2.56,
+      "marginal_rate_mae_bits_per_time": 0.025525457066701816,
+      "conditional_rate_mae_bits_per_time": 0.02324638994277616
+    },
+    {
+      "seed": 111,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        5.0,
+        25.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8080176670046058,
+      "process_peak_rss_bytes": 200720384,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 11,
+      "ratio": 5.0,
+      "edges": [
+        [
+          2,
+          0
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "duration_over_slowest_tau": 81.92,
+      "segment_duration_over_slowest_tau": 2.56,
+      "marginal_rate_mae_bits_per_time": 0.024848600248635177,
+      "conditional_rate_mae_bits_per_time": 0.028864470973905283
+    },
+    {
+      "seed": 100,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        10.0,
+        100.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.794195166999998,
+      "process_peak_rss_bytes": 200720384,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 0,
+      "ratio": 10.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 20.48,
+      "segment_duration_over_slowest_tau": 0.64,
+      "marginal_rate_mae_bits_per_time": 0.022862698207737998,
+      "conditional_rate_mae_bits_per_time": 0.02294729502808239
+    },
+    {
+      "seed": 101,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        10.0,
+        100.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7887508330022683,
+      "process_peak_rss_bytes": 200720384,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 1,
+      "ratio": 10.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 20.48,
+      "segment_duration_over_slowest_tau": 0.64,
+      "marginal_rate_mae_bits_per_time": 0.011400621772473642,
+      "conditional_rate_mae_bits_per_time": 0.019029435108554107
+    },
+    {
+      "seed": 102,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        10.0,
+        100.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7802670419987408,
+      "process_peak_rss_bytes": 200720384,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 2,
+      "ratio": 10.0,
+      "edges": [
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 20.48,
+      "segment_duration_over_slowest_tau": 0.64,
+      "marginal_rate_mae_bits_per_time": 0.02561110923111896,
+      "conditional_rate_mae_bits_per_time": 0.027340469471012697
+    },
+    {
+      "seed": 103,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        10.0,
+        100.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7773140420031268,
+      "process_peak_rss_bytes": 200736768,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 3,
+      "ratio": 10.0,
+      "edges": [
+        [
+          0,
+          2
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "duration_over_slowest_tau": 20.48,
+      "segment_duration_over_slowest_tau": 0.64,
+      "marginal_rate_mae_bits_per_time": 0.020591668498444484,
+      "conditional_rate_mae_bits_per_time": 0.021993557510201902
+    },
+    {
+      "seed": 104,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        10.0,
+        100.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8036730839958182,
+      "process_peak_rss_bytes": 200736768,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 4,
+      "ratio": 10.0,
+      "edges": [
+        [
+          2,
+          1
+        ],
+        [
+          1,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 20.48,
+      "segment_duration_over_slowest_tau": 0.64,
+      "marginal_rate_mae_bits_per_time": 0.003014844708163871,
+      "conditional_rate_mae_bits_per_time": 0.02176575559106982
+    },
+    {
+      "seed": 105,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        10.0,
+        100.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7750634999974864,
+      "process_peak_rss_bytes": 200736768,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 5,
+      "ratio": 10.0,
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 20.48,
+      "segment_duration_over_slowest_tau": 0.64,
+      "marginal_rate_mae_bits_per_time": 0.025776545372222143,
+      "conditional_rate_mae_bits_per_time": 0.025945970078849617
+    },
+    {
+      "seed": 106,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        10.0,
+        100.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7875881250001839,
+      "process_peak_rss_bytes": 200736768,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 6,
+      "ratio": 10.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "duration_over_slowest_tau": 20.48,
+      "segment_duration_over_slowest_tau": 0.64,
+      "marginal_rate_mae_bits_per_time": 0.014932151898968335,
+      "conditional_rate_mae_bits_per_time": 0.014816718026957157
+    },
+    {
+      "seed": 107,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        10.0,
+        100.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7847725410028943,
+      "process_peak_rss_bytes": 200736768,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 0,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 0,
+      "recall": 0.0,
+      "precision": null,
+      "false_discovery_proportion": 0.0,
+      "motif": 7,
+      "ratio": 10.0,
+      "edges": [
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 20.48,
+      "segment_duration_over_slowest_tau": 0.64,
+      "marginal_rate_mae_bits_per_time": 0.027771551210618816,
+      "conditional_rate_mae_bits_per_time": 0.030872274955792606
+    },
+    {
+      "seed": 108,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        10.0,
+        100.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7671382909975364,
+      "process_peak_rss_bytes": 200736768,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 8,
+      "ratio": 10.0,
+      "edges": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 20.48,
+      "segment_duration_over_slowest_tau": 0.64,
+      "marginal_rate_mae_bits_per_time": 0.019190116381280833,
+      "conditional_rate_mae_bits_per_time": 0.011760346254464376
+    },
+    {
+      "seed": 109,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        10.0,
+        100.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7606562079963624,
+      "process_peak_rss_bytes": 200753152,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 9,
+      "ratio": 10.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 20.48,
+      "segment_duration_over_slowest_tau": 0.64,
+      "marginal_rate_mae_bits_per_time": 0.029770407330688198,
+      "conditional_rate_mae_bits_per_time": 0.028266888764223525
+    },
+    {
+      "seed": 110,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        10.0,
+        100.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7867031659989152,
+      "process_peak_rss_bytes": 200753152,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 10,
+      "ratio": 10.0,
+      "edges": [
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 20.48,
+      "segment_duration_over_slowest_tau": 0.64,
+      "marginal_rate_mae_bits_per_time": 0.022423973448792305,
+      "conditional_rate_mae_bits_per_time": 0.022251360146334873
+    },
+    {
+      "seed": 111,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        10.0,
+        100.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7929739169994718,
+      "process_peak_rss_bytes": 200753152,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 11,
+      "ratio": 10.0,
+      "edges": [
+        [
+          2,
+          0
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "duration_over_slowest_tau": 20.48,
+      "segment_duration_over_slowest_tau": 0.64,
+      "marginal_rate_mae_bits_per_time": 0.006615415806929242,
+      "conditional_rate_mae_bits_per_time": 0.024960800887825266
+    },
+    {
+      "seed": 100,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        20.0,
+        400.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7705930000010994,
+      "process_peak_rss_bytes": 200753152,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 0,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 0,
+      "recall": 0.0,
+      "precision": null,
+      "false_discovery_proportion": 0.0,
+      "motif": 0,
+      "ratio": 20.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 5.12,
+      "segment_duration_over_slowest_tau": 0.16,
+      "marginal_rate_mae_bits_per_time": 0.02355681907116859,
+      "conditional_rate_mae_bits_per_time": 0.023637417822687138
+    },
+    {
+      "seed": 101,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        20.0,
+        400.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7745373750003637,
+      "process_peak_rss_bytes": 200753152,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 1,
+      "ratio": 20.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 5.12,
+      "segment_duration_over_slowest_tau": 0.16,
+      "marginal_rate_mae_bits_per_time": 0.0190837765454233,
+      "conditional_rate_mae_bits_per_time": 0.021157720097337348
+    },
+    {
+      "seed": 102,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        20.0,
+        400.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7772692090002238,
+      "process_peak_rss_bytes": 200753152,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 2,
+      "ratio": 20.0,
+      "edges": [
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 5.12,
+      "segment_duration_over_slowest_tau": 0.16,
+      "marginal_rate_mae_bits_per_time": 0.022161882160171387,
+      "conditional_rate_mae_bits_per_time": 0.024833024617476853
+    },
+    {
+      "seed": 103,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        20.0,
+        400.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7846527500005323,
+      "process_peak_rss_bytes": 200753152,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 0,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 0,
+      "recall": 0.0,
+      "precision": null,
+      "false_discovery_proportion": 0.0,
+      "motif": 3,
+      "ratio": 20.0,
+      "edges": [
+        [
+          0,
+          2
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "duration_over_slowest_tau": 5.12,
+      "segment_duration_over_slowest_tau": 0.16,
+      "marginal_rate_mae_bits_per_time": 0.01702398889357283,
+      "conditional_rate_mae_bits_per_time": 0.017425937384752
+    },
+    {
+      "seed": 104,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        20.0,
+        400.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8050517500014394,
+      "process_peak_rss_bytes": 200753152,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 4,
+      "ratio": 20.0,
+      "edges": [
+        [
+          2,
+          1
+        ],
+        [
+          1,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 5.12,
+      "segment_duration_over_slowest_tau": 0.16,
+      "marginal_rate_mae_bits_per_time": 0.015241687702010153,
+      "conditional_rate_mae_bits_per_time": 0.018531854025099614
+    },
+    {
+      "seed": 105,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        20.0,
+        400.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7884145839998382,
+      "process_peak_rss_bytes": 200753152,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 0,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 0,
+      "recall": 0.0,
+      "precision": null,
+      "false_discovery_proportion": 0.0,
+      "motif": 5,
+      "ratio": 20.0,
+      "edges": [
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 5.12,
+      "segment_duration_over_slowest_tau": 0.16,
+      "marginal_rate_mae_bits_per_time": 0.032620358624590486,
+      "conditional_rate_mae_bits_per_time": 0.032668644276093284
+    },
+    {
+      "seed": 106,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        20.0,
+        400.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7731656249961816,
+      "process_peak_rss_bytes": 200753152,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 0,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 0,
+      "recall": 0.0,
+      "precision": null,
+      "false_discovery_proportion": 0.0,
+      "motif": 6,
+      "ratio": 20.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "duration_over_slowest_tau": 5.12,
+      "segment_duration_over_slowest_tau": 0.16,
+      "marginal_rate_mae_bits_per_time": 0.017993984076622355,
+      "conditional_rate_mae_bits_per_time": 0.017914621025620085
+    },
+    {
+      "seed": 107,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        20.0,
+        400.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7565777909985627,
+      "process_peak_rss_bytes": 200769536,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 0,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 0,
+      "recall": 0.0,
+      "precision": null,
+      "false_discovery_proportion": 0.0,
+      "motif": 7,
+      "ratio": 20.0,
+      "edges": [
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 5.12,
+      "segment_duration_over_slowest_tau": 0.16,
+      "marginal_rate_mae_bits_per_time": 0.02759801272027713,
+      "conditional_rate_mae_bits_per_time": 0.03030398390189741
+    },
+    {
+      "seed": 108,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        20.0,
+        400.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7465141249995213,
+      "process_peak_rss_bytes": 200769536,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 8,
+      "ratio": 20.0,
+      "edges": [
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "duration_over_slowest_tau": 5.12,
+      "segment_duration_over_slowest_tau": 0.16,
+      "marginal_rate_mae_bits_per_time": 0.02323075180304777,
+      "conditional_rate_mae_bits_per_time": 0.019431420954907058
+    },
+    {
+      "seed": 109,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        20.0,
+        400.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7522303750010906,
+      "process_peak_rss_bytes": 200769536,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 9,
+      "ratio": 20.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 5.12,
+      "segment_duration_over_slowest_tau": 0.16,
+      "marginal_rate_mae_bits_per_time": 0.029367784776638945,
+      "conditional_rate_mae_bits_per_time": 0.028670777486671004
+    },
+    {
+      "seed": 110,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        20.0,
+        400.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7562910419947002,
+      "process_peak_rss_bytes": 200769536,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 10,
+      "ratio": 20.0,
+      "edges": [
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "duration_over_slowest_tau": 5.12,
+      "segment_duration_over_slowest_tau": 0.16,
+      "marginal_rate_mae_bits_per_time": 0.0190557188422548,
+      "conditional_rate_mae_bits_per_time": 0.019518755679299202
+    },
+    {
+      "seed": 111,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        20.0,
+        400.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.787984292001056,
+      "process_peak_rss_bytes": 200769536,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "motif": 11,
+      "ratio": 20.0,
+      "edges": [
+        [
+          2,
+          0
+        ],
+        [
+          2,
+          1
+        ]
+      ],
+      "duration_over_slowest_tau": 5.12,
+      "segment_duration_over_slowest_tau": 0.16,
+      "marginal_rate_mae_bits_per_time": 0.015404969301410313,
+      "conditional_rate_mae_bits_per_time": 0.01920348070267276
+    }
+  ],
+  "sensitivity": [
+    {
+      "seed": 300,
+      "n": 2048,
+      "fs": 2.0,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.6036239580062102,
+      "process_peak_rss_bytes": 200900608,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "case": "short",
+      "coupling": 1.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ]
+      ]
+    },
+    {
+      "seed": 301,
+      "n": 8192,
+      "fs": 2.0,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 256,
+      "shrinkage": 0,
+      "seconds": 1.134698624999146,
+      "process_peak_rss_bytes": 202932224,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "case": "long",
+      "coupling": 1.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ]
+      ]
+    },
+    {
+      "seed": 302,
+      "n": 4096,
+      "fs": 2.0,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 512,
+      "shrinkage": 0,
+      "seconds": 0.9997641250010929,
+      "process_peak_rss_bytes": 203063296,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "case": "long_segments",
+      "coupling": 1.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ]
+      ]
+    },
+    {
+      "seed": 303,
+      "n": 4096,
+      "fs": 2.0,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7792873749931459,
+      "process_peak_rss_bytes": 203063296,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "case": "weak",
+      "coupling": 0.4,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ]
+      ]
+    },
+    {
+      "seed": 304,
+      "n": 4096,
+      "fs": 0.5,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7821258749972912,
+      "process_peak_rss_bytes": 203063296,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "case": "coarse_sampling",
+      "coupling": 1.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ]
+      ]
+    },
+    {
+      "seed": 305,
+      "n": 4096,
+      "fs": 8.0,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8326856670028064,
+      "process_peak_rss_bytes": 203063296,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": false,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Detected undirected cycles conflict with the forest reconstruction theorem; no tree is forced.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 1,
+      "truth_edges": 2,
+      "detected_edges": 3,
+      "recall": 1.0,
+      "precision": 0.6666666666666666,
+      "false_discovery_proportion": 0.3333333333333333,
+      "case": "fine_sampling",
+      "coupling": 1.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ]
+      ]
+    },
+    {
+      "seed": 306,
+      "n": 4096,
+      "fs": 2.0,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0.1,
+      "seconds": 0.7894446670034085,
+      "process_peak_rss_bytes": 203063296,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "case": "regularized",
+      "coupling": 1.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ]
+      ]
+    },
+    {
+      "seed": 307,
+      "n": 4096,
+      "fs": 2.0,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0,
+        8.0,
+        16.0,
+        32.0
+      ],
+      "nperseg": 256,
+      "shrinkage": 0,
+      "seconds": 5.411699166004837,
+      "process_peak_rss_bytes": 209125376,
+      "unresolved_pairs": 3,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "spectral null budget cannot resolve an isolated discovery at the first FDR threshold",
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 0,
+      "false_positive": 0,
+      "truth_edges": 5,
+      "detected_edges": 0,
+      "recall": 0.0,
+      "precision": null,
+      "false_discovery_proportion": 0.0,
+      "case": "star_six",
+      "coupling": 1.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          5
+        ]
+      ]
+    },
+    {
+      "seed": 308,
+      "n": 4096,
+      "fs": 2.0,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0,
+        8.0,
+        16.0,
+        32.0
+      ],
+      "nperseg": 256,
+      "shrinkage": 0,
+      "seconds": 5.543493125005625,
+      "process_peak_rss_bytes": 209158144,
+      "unresolved_pairs": 4,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "spectral null budget cannot resolve an isolated discovery at the first FDR threshold",
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 0,
+      "false_positive": 0,
+      "truth_edges": 5,
+      "detected_edges": 0,
+      "recall": 0.0,
+      "precision": null,
+      "false_discovery_proportion": 0.0,
+      "case": "chain_six",
+      "coupling": 1.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          4,
+          5
+        ]
+      ]
+    },
+    {
+      "seed": 309,
+      "n": 4096,
+      "fs": 2.0,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0,
+        8.0,
+        16.0,
+        32.0,
+        64.0,
+        128.0
+      ],
+      "nperseg": 2048,
+      "shrinkage": 0,
+      "seconds": 0.01013891700131353,
+      "process_peak_rss_bytes": 211451904,
+      "unresolved_pairs": 28,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "spectral null budget cannot resolve an isolated discovery at the first FDR threshold",
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 0,
+      "false_positive": 0,
+      "truth_edges": 7,
+      "detected_edges": 0,
+      "recall": 0.0,
+      "precision": null,
+      "false_discovery_proportion": 0.0,
+      "case": "underidentified",
+      "coupling": 1.0,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          5
+        ],
+        [
+          0,
+          6
+        ],
+        [
+          0,
+          7
+        ]
+      ]
+    }
+  ],
+  "failures": [
+    {
+      "seed": 400,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.7942667910028831,
+      "process_peak_rss_bytes": 217317376,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "case": "tanh",
+      "strength": 0.1,
+      "outside_theorem": "nonlinear dynamics; Euler reference at dt=.02"
+    },
+    {
+      "seed": 400,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8004038329963805,
+      "process_peak_rss_bytes": 217317376,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "case": "tanh",
+      "strength": 2.0,
+      "outside_theorem": "nonlinear dynamics; Euler reference at dt=.02"
+    },
+    {
+      "seed": 400,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8707245840050746,
+      "process_peak_rss_bytes": 217317376,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "case": "cubic",
+      "strength": 0.01,
+      "outside_theorem": "nonlinear dynamics; Euler reference at dt=.02"
+    },
+    {
+      "seed": 400,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.800586375000421,
+      "process_peak_rss_bytes": 217317376,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 1,
+      "recall": 0.5,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "case": "cubic",
+      "strength": 0.2,
+      "outside_theorem": "nonlinear dynamics; Euler reference at dt=.02"
+    },
+    {
+      "seed": 410,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8656158330049948,
+      "process_peak_rss_bytes": 217399296,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 0,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 0,
+      "recall": 0.0,
+      "precision": null,
+      "false_discovery_proportion": 0.0,
+      "case": "xor",
+      "outside_theorem": "pure synergy invisible to Gaussian spectra"
+    },
+    {
+      "seed": 411,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.12256320899905404,
+      "process_peak_rss_bytes": 217399296,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 0,
+      "false_positive": 1,
+      "truth_edges": 0,
+      "detected_edges": 1,
+      "recall": null,
+      "precision": 0.0,
+      "false_discovery_proportion": 1.0,
+      "case": "correlated_noise",
+      "outside_theorem": "correlated innovations with no dynamical coupling"
+    },
+    {
+      "seed": 412,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.12334133299737005,
+      "process_peak_rss_bytes": 217399296,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 1,
+      "false_positive": 0,
+      "truth_edges": 1,
+      "detected_edges": 1,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "case": "reciprocal",
+      "outside_theorem": "two directed interactions per undirected edge"
+    },
+    {
+      "seed": 413,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8181117079948308,
+      "process_peak_rss_bytes": 217399296,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": false,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Detected undirected cycles conflict with the forest reconstruction theorem; no tree is forced.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 3,
+      "false_positive": 0,
+      "truth_edges": 3,
+      "detected_edges": 3,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0,
+      "case": "triangle",
+      "outside_theorem": "undirected cycle, despite being a directed DAG"
+    },
+    {
+      "seed": 414,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.12616004199662711,
+      "process_peak_rss_bytes": 217399296,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 0,
+      "false_positive": 1,
+      "truth_edges": 0,
+      "detected_edges": 1,
+      "recall": null,
+      "precision": 0.0,
+      "false_discovery_proportion": 1.0,
+      "case": "hidden_driver",
+      "outside_theorem": "unobserved common driver"
+    },
+    {
+      "seed": 415,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.806588790997921,
+      "process_peak_rss_bytes": 217399296,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 0,
+      "false_positive": 0,
+      "truth_edges": 0,
+      "detected_edges": 0,
+      "recall": null,
+      "precision": null,
+      "false_discovery_proportion": 0.0,
+      "case": "nonstationary",
+      "outside_theorem": "shared deterministic drift, nonstationary"
+    }
+  ],
+  "handoff": {
+    "empirical_discovery": {
+      "seed": 500,
+      "n": 4096,
+      "fs": 2,
+      "timescales": [
+        1.0,
+        2.0,
+        4.0
+      ],
+      "nperseg": 128,
+      "shrinkage": 0,
+      "seconds": 0.8402651249998598,
+      "process_peak_rss_bytes": 217399296,
+      "unresolved_pairs": 0,
+      "resolved_arrows": 0,
+      "detected_graph_is_forest": true,
+      "warnings": [
+        "Forest, Gaussian, stationarity, full-observation and independent-noise assumptions are not verified.",
+        "Fitted Gaussian spectral-bootstrap p-values are approximate and require regime-specific calibration."
+      ],
+      "true_positive": 2,
+      "false_positive": 0,
+      "truth_edges": 2,
+      "detected_edges": 2,
+      "recall": 1.0,
+      "precision": 1.0,
+      "false_discovery_proportion": 0.0
+    },
+    "sampled_population_graph_is_forest": false,
+    "comparisons": [
+      {
+        "method": "plugin",
+        "allocated_samples": 12288,
+        "discovery_samples": 4096,
+        "selection_samples": 4096,
+        "layer_samples": 4096,
+        "seconds_without_discovery": 4.541270583002188,
+        "seconds_including_discovery": 4.541270583002188,
+        "selected_directed_edges": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ]
+        ],
+        "layers_confirmed_directed_edges": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ]
+        ],
+        "structural_undirected_score": {
+          "true_positive": 2,
+          "false_positive": 0,
+          "truth_edges": 2,
+          "detected_edges": 2,
+          "recall": 1.0,
+          "precision": 1.0,
+          "false_discovery_proportion": 0.0
+        },
+        "te_decomposition_identity": true,
+        "shared_only_edges": [
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            2,
+            0
+          ],
+          [
+            2,
+            1
+          ]
+        ]
+      },
+      {
+        "method": "gaussian",
+        "allocated_samples": 12288,
+        "discovery_samples": 4096,
+        "selection_samples": 4096,
+        "layer_samples": 4096,
+        "seconds_without_discovery": 3.452677125002083,
+        "seconds_including_discovery": 3.452677125002083,
+        "selected_directed_edges": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ]
+        ],
+        "layers_confirmed_directed_edges": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ]
+        ],
+        "structural_undirected_score": {
+          "true_positive": 2,
+          "false_positive": 0,
+          "truth_edges": 2,
+          "detected_edges": 2,
+          "recall": 1.0,
+          "precision": 1.0,
+          "false_discovery_proportion": 0.0
+        },
+        "te_decomposition_identity": true,
+        "shared_only_edges": [
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            2,
+            0
+          ],
+          [
+            2,
+            1
+          ]
+        ]
+      },
+      {
+        "method": "guided_gaussian",
+        "allocated_samples": 12288,
+        "discovery_samples": 4096,
+        "selection_samples": 4096,
+        "layer_samples": 4096,
+        "seconds_without_discovery": 2.858196916997258,
+        "seconds_including_discovery": 3.698462041997118,
+        "selected_directed_edges": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ]
+        ],
+        "layers_confirmed_directed_edges": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            2
+          ]
+        ],
+        "structural_undirected_score": {
+          "true_positive": 2,
+          "false_positive": 0,
+          "truth_edges": 2,
+          "detected_edges": 2,
+          "recall": 1.0,
+          "precision": 1.0,
+          "false_discovery_proportion": 0.0
+        },
+        "te_decomposition_identity": true,
+        "shared_only_edges": [
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            2,
+            0
+          ],
+          [
+            2,
+            1
+          ]
+        ]
+      }
+    ]
+  }
+}
