@@ -16,6 +16,10 @@ coupling lag per link, vector-autoregressive or coupled-logistic-map dynamics), 
 by precision, recall, specificity, and lag error; and motif networks whose layers are
 known (XOR synergy, a common driver, a chain), scored by how often the right layer,
 role, or flag is reported.
+
+*Synergy validation*: the mechanisms of :cite:`Hourican2026`, scored by whether jointly
+informative parents and lag-0 explanation families are recovered, and synthetic modules
+planted beside a fixed background.
 """
 
 import time
@@ -27,17 +31,20 @@ from dit.inference._symbols import as_generator
 from .measures import cmi_from_joint, dense_codes, joint_table
 
 __all__ = (
+    "MODULES",
     "conditioning_scaling",
     "latent_validation",
     "lorenz96_graph",
     "motif_validation",
     "network_validation",
+    "planted_module_validation",
     "random_network",
     "rank_metrics",
     "scaling_data",
     "score_edges",
     "score_network",
     "simulate_network",
+    "synergy_validation",
 )
 
 ESTIMATORS = ("plugin", "miller_madow", "adaptive", "ksg")
@@ -710,4 +717,200 @@ def motif_validation(n_samples=3000, n_reps=5, infer_kwargs=None, prng=None):
         {"rate": (("check",), [float(np.mean(checks[c])) for c in names])},
         coords={"check": names},
         attrs={"n_reps": n_reps, "n_samples": n_samples},
+    )
+
+
+def _proportions(checks, level=0.95):
+    """
+    The rate and Clopper-Pearson interval of each check's outcomes, as a Dataset over (check,).
+    """
+    from scipy.stats import binomtest
+
+    names = list(checks)
+    successes = [int(np.sum(checks[c])) for c in names]
+    trials = [len(checks[c]) for c in names]
+    intervals = [binomtest(k, m).proportion_ci(level, method="exact") for k, m in zip(successes, trials, strict=True)]
+    return xr.Dataset(
+        {
+            "rate": (("check",), [k / m for k, m in zip(successes, trials, strict=True)]),
+            "ci_low": (("check",), [ci.low for ci in intervals]),
+            "ci_high": (("check",), [ci.high for ci in intervals]),
+            "successes": (("check",), successes),
+            "trials": (("check",), trials),
+        },
+        coords={"check": names},
+    )
+
+
+def synergy_validation(n_samples=4000, n_reps=10, settings=None, prng=None):
+    """
+    How often jointly informative parents and lag-0 explanation families are recovered on the
+    mechanisms of :cite:`Hourican2026`.
+
+    Lagged motifs (:mod:`infoflow.datasets`) are scored on the selected parents
+    (:func:`~infoflow.selection.infer_skeleton`):
+
+    * ``xor_synergy`` with flips 0.1, 0.25 and 0.45: both parents found;
+    * ``xor_descendant``: ``y``'s parents are ``x1`` and ``x2``, and ``w``'s is ``y`` alone;
+    * ``asymmetric_interaction`` and ``or_gate``: both parents found;
+    * ``xor_among`` (12 processes, parents at lags 3 and 2): both parents found.
+
+    Lag-0 motifs (:func:`~infoflow.datasets.contemporaneous_motif`) are scored by whether
+    :func:`~infoflow.contemporaneous.contemporaneous_families` returns exactly the population
+    family, which :func:`~infoflow.families.explanation_family` computes from the exact law.
+
+    Parameters
+    ----------
+    n_samples : int
+    n_reps : int
+    settings : SkeletonSettings, None
+    prng : None, int, Generator
+
+    Returns
+    -------
+    xarray.Dataset
+        ``rate`` with its 95% Clopper-Pearson interval (``ci_low``, ``ci_high``), and
+        ``successes`` and ``trials``, over (check,).
+    """
+    from . import datasets
+    from .contemporaneous import contemporaneous_families
+    from .data import DiscreteData
+    from .embedding import Embedding
+    from .families import decisions_from_distribution, explanation_family
+    from .selection import infer_skeleton
+
+    rng = as_generator(prng)
+    checks = {}
+
+    def record(name, ok):
+        checks.setdefault(name, []).append(bool(ok))
+
+    def parents(array, targets, seed):
+        skeleton = infer_skeleton(
+            DiscreteData.from_discrete(array), Embedding(max_lag=1), targets=targets, settings=settings, prng=seed
+        )
+        return {t: set(skeleton[t].parents()) for t in targets}
+
+    reference = {
+        kind: set(
+            explanation_family(
+                decisions_from_distribution(datasets.contemporaneous_motif(kind=kind, law=True))
+            ).candidates
+        )
+        for kind in datasets.CONTEMPORANEOUS_MOTIFS
+    }
+    for _ in range(n_reps):
+        seed = int(rng.integers(2**32))
+        for noise in (0.1, 0.25, 0.45):
+            found = parents(datasets.xor_synergy(n_samples, noise=noise, seed=seed), [2], seed)
+            record(f"xor, flip {noise}: both parents", found[2] == {0, 1})
+        found = parents(datasets.xor_descendant(n_samples, seed=seed), [2, 3], seed)
+        record("xor with a descendant: y <- x1, x2", found[2] == {0, 1})
+        record("xor with a descendant: w <- y only", found[3] == {2})
+        found = parents(datasets.asymmetric_interaction(n_samples, seed=seed), [2], seed)
+        record("asymmetric interaction: both parents", found[2] == {0, 1})
+        found = parents(datasets.or_gate(n_samples, seed=seed), [2], seed)
+        record("or: both parents", found[2] == {0, 1})
+        found = parents(datasets.xor_among(n_samples, seed=seed), [11], seed)
+        record("xor among 12 processes: both parents", found[11] == {8, 10})
+        for kind in datasets.CONTEMPORANEOUS_MOTIFS:
+            data = DiscreteData.from_discrete(datasets.contemporaneous_motif(n_samples, kind, seed=seed))
+            skeleton = infer_skeleton(data, Embedding(max_lag=1), settings=settings, prng=seed)
+            families = contemporaneous_families(data, skeleton, prng=seed).families
+            exact = len(families) == 1 and set(families[0].candidates) == reference[kind]
+            record(f"lag-0 {kind}: the population family", exact)
+    result = _proportions(checks)
+    result.attrs.update(n_reps=n_reps, n_samples=n_samples)
+    return result
+
+
+#: The synthetic modules of :func:`planted_module_validation`.
+MODULES = ("xor", "xor_descendant", "or", "independent")
+
+
+def _module(kind, n, rng):
+    """
+    Synthetic module columns, and each module variable's true parents (module positions).
+    """
+    from . import datasets
+
+    if kind == "xor":
+        return datasets.xor_synergy(n, noise=0.1, seed=rng), {0: set(), 1: set(), 2: {0, 1}}
+    if kind == "xor_descendant":
+        return datasets.xor_descendant(n, seed=rng), {0: set(), 1: set(), 2: {0, 1}, 3: {2}}
+    if kind == "or":
+        return datasets.or_gate(n, seed=rng), {0: set(), 1: set(), 2: {0, 1}}
+    if kind == "independent":
+        return rng.integers(0, 2, (n, 3)), {0: set(), 1: set(), 2: set()}
+    raise ValueError(f"module must be one of {MODULES}")
+
+
+def planted_module_validation(background, modules=MODULES, n_reps=10, settings=None, embeddings=None, prng=None):
+    """
+    Recovery of synthetic modules planted beside a fixed background :cite:`Hourican2026`.
+
+    Each replicate appends a freshly drawn module, independent of the background, to the
+    background's columns, and selects the parents of the module's variables
+    (:func:`~infoflow.selection.infer_skeleton`). The background supplies realistic
+    distractors without needing known ground truth. Modules: an XOR (``xor``), an XOR with a
+    descendant (``xor_descendant``), an OR (``or``), and three independent bits as a
+    negative control (``independent``). Replicates share one background, so they are not
+    independent samples of the background's system.
+
+    Parameters
+    ----------
+    background : array_like
+        Discrete samples, shape (samples, processes).
+    modules : sequence of str
+    n_reps : int
+    settings : SkeletonSettings, None
+    embeddings : Embedding or list of Embedding, None
+        Default: one lag for every process. A list must also cover the module columns.
+    prng : None, int, Generator
+
+    Returns
+    -------
+    xarray.Dataset
+        Over (module,): ``recovered`` (every true parent of every module variable is found;
+        wrong extra parents allowed) and ``exact`` (no wrong parents either), each with its
+        95% Clopper-Pearson interval over (module, bound) as ``recovered_ci`` and
+        ``exact_ci``; and ``false_parents``, the mean number of wrong parents of module
+        variables per replicate, from the background or the module.
+    """
+    from .data import DiscreteData
+    from .embedding import Embedding
+    from .selection import infer_skeleton
+
+    rng = as_generator(prng)
+    background = np.asarray(background)
+    B = background.shape[1]
+    recovered, exact, false = {}, {}, {}
+    for kind in modules:
+        for _ in range(n_reps):
+            columns, truth = _module(kind, len(background), rng)
+            data = DiscreteData.from_discrete(np.concatenate([background, columns], axis=1))
+            targets = [B + k for k in truth]
+            skeleton = infer_skeleton(
+                data,
+                embeddings or Embedding(max_lag=1),
+                targets=targets,
+                settings=settings,
+                prng=int(rng.integers(2**32)),
+            )
+            found = {k: set(skeleton[B + k].parents()) for k in truth}
+            expected = {k: {B + p for p in truth[k]} for k in truth}
+            recovered.setdefault(kind, []).append(all(expected[k] <= found[k] for k in truth))
+            exact.setdefault(kind, []).append(all(found[k] == expected[k] for k in truth))
+            false.setdefault(kind, []).append(sum(len(found[k] - expected[k]) for k in truth))
+    rec, ex = _proportions(recovered), _proportions(exact)
+    return xr.Dataset(
+        {
+            "recovered": (("module",), rec.rate.values),
+            "recovered_ci": (("module", "bound"), np.stack([rec.ci_low.values, rec.ci_high.values], axis=1)),
+            "exact": (("module",), ex.rate.values),
+            "exact_ci": (("module", "bound"), np.stack([ex.ci_low.values, ex.ci_high.values], axis=1)),
+            "false_parents": (("module",), [float(np.mean(false[k])) for k in modules]),
+        },
+        coords={"module": list(modules), "bound": ["low", "high"]},
+        attrs={"n_reps": n_reps, "background_processes": B},
     )

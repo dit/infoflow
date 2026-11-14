@@ -131,7 +131,10 @@ Multiple datasets                   :func:`~infoflow.regimes.infer_with_context`
 Stability selection / e-values      :func:`~infoflow.stability.stability_selection`
 Weaker adjacency faithfulness       pair search for lagged parents (``synergy_search``);
                                     lag-0 explanation families,
-                                    :func:`~infoflow.contemporaneous.contemporaneous_families`
+                                    :func:`~infoflow.contemporaneous.contemporaneous_families`;
+                                    benchmarks,
+                                    :func:`~infoflow.benchmarks.synergy_validation` and
+                                    :func:`~infoflow.benchmarks.planted_module_validation`
 Mixed-type CMI                      ``SkeletonSettings(estimator="mixed")``
 Predictive (AGM-TE style) TE        :func:`~infoflow.predictive.predictive_transfer_entropy`
 O-information rate                  :mod:`infoflow.oinfo`
