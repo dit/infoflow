@@ -2,25 +2,34 @@
 Benchmark data with known coupling structure.
 
 All generators take a ``seed`` and return an array of shape (samples, processes),
-except :func:`spiking_glm`, which returns spike times and the true couplings.
+except :func:`spiking_glm`, which returns spike times and the true couplings, and
+:func:`contemporaneous_motif` with ``law=True``, which returns the exact distribution.
 """
+
+import itertools
 
 import numpy as np
 
 __all__ = (
+    "CONTEMPORANEOUS_MOTIFS",
+    "asymmetric_interaction",
     "chain",
     "common_driver",
+    "contemporaneous_motif",
     "coupled_logistic",
     "coupled_tent",
     "lorenz96",
     "multiscale_ou",
     "mute_network",
     "noisy_eca",
+    "or_gate",
     "orthogonal_features",
     "spiking_glm",
     "switching_coupling",
     "tent_ring_coupling",
     "var_process",
+    "xor_among",
+    "xor_descendant",
     "xor_synergy",
 )
 
@@ -268,6 +277,112 @@ def xor_synergy(n=3000, noise=0.0, seed=None):
     x1, x2 = rng.integers(0, 2, n), rng.integers(0, 2, n)
     y = np.roll(x1 ^ x2, 1) ^ (rng.random(n) < noise)
     return np.stack([x1, x2, y], axis=1)
+
+
+def xor_descendant(n=3000, noise=0.1, descendant_noise=0.1, seed=None):
+    """
+    Binary XOR with a descendant :cite:`Hourican2026`: ``y_t = x1_{t-1} xor x2_{t-1}``
+    (flipped with probability `noise`) and ``w_t = y_{t-1}`` (flipped with probability
+    `descendant_noise`). Columns (x1, x2, y, w).
+    """
+    rng = _rng(seed)
+    x1, x2 = rng.integers(0, 2, n), rng.integers(0, 2, n)
+    y = np.roll(x1 ^ x2, 1) ^ (rng.random(n) < noise)
+    w = np.roll(y, 1) ^ (rng.random(n) < descendant_noise)
+    return np.stack([x1, x2, y, w], axis=1)
+
+
+def asymmetric_interaction(n=3000, seed=None):
+    """
+    The asymmetric interaction of :cite:`Hourican2026`: ``x1 ~ Bernoulli(0.35)``,
+    ``x2 ~ Bernoulli(0.6)``, and ``y_t = 1`` with probability 0.1, 0.9, 0.8 or 0.2 when
+    ``(x1_{t-1}, x2_{t-1})`` is 00, 01, 10 or 11. Columns (x1, x2, y).
+    """
+    rng = _rng(seed)
+    x1, x2 = (rng.random(n) < 0.35).astype(int), (rng.random(n) < 0.6).astype(int)
+    p = np.array([0.1, 0.9, 0.8, 0.2])[2 * np.roll(x1, 1) + np.roll(x2, 1)]
+    return np.stack([x1, x2, (rng.random(n) < p).astype(int)], axis=1)
+
+
+def or_gate(n=3000, noise=0.1, seed=None):
+    """
+    Binary ``y_t = x1_{t-1} or x2_{t-1}`` (flipped with probability `noise`). Columns (x1, x2, y).
+    """
+    rng = _rng(seed)
+    x1, x2 = rng.integers(0, 2, n), rng.integers(0, 2, n)
+    y = np.roll(x1 | x2, 1) ^ (rng.random(n) < noise)
+    return np.stack([x1, x2, y], axis=1)
+
+
+def xor_among(n=4000, n_processes=12, parents=((8, 3), (10, 2)), noise=0.1, seed=None):
+    """
+    Independent fair bits, except the last process: the XOR of the given ``(process, lag)``
+    parents, flipped with probability `noise`. With many processes and long lags the pair
+    lies beyond a small pair-search pool (``SkeletonSettings.max_pairs``).
+    """
+    rng = _rng(seed)
+    x = rng.integers(0, 2, (n, n_processes))
+    y = np.zeros(n, dtype=int)
+    for p, lag in parents:
+        y ^= np.roll(x[:, p], lag)
+    x[:, -1] = y ^ (rng.random(n) < noise)
+    return x
+
+
+#: The kinds of :func:`contemporaneous_motif`.
+CONTEMPORANEOUS_MOTIFS = ("xor", "xor_descendant", "or", "chain", "independent_baseline", "dependent_baseline")
+
+
+def _bit(p, value):
+    return p if value else 1 - p
+
+
+def _motif(kind):
+    """
+    The number of variables of a lag-0 motif, and its unnormalized probability of an outcome.
+    """
+    if kind == "xor":
+        return 3, lambda o: _bit(0.1, o[2] ^ o[0] ^ o[1])
+    if kind == "xor_descendant":
+        return 4, lambda o: _bit(0.1, o[2] ^ o[0] ^ o[1]) * _bit(0.1, o[3] ^ o[2])
+    if kind == "or":
+        return 3, lambda o: _bit(0.1, o[2] ^ (o[0] | o[1]))
+    if kind == "chain":
+        return 4, lambda o: _bit(1 / 3, o[0]) * _bit(0.1, o[1] ^ o[0]) * _bit(0.1, o[2] ^ o[1]) * _bit(0.1, o[3] ^ o[2])
+    if kind == "independent_baseline":
+        return 4, lambda o: _bit(0.1, o[2] ^ o[0] ^ o[1]) * _bit(0.1, o[3] ^ o[1])
+    if kind == "dependent_baseline":
+        return 4, lambda o: _bit(0.2, o[1] ^ o[0]) * _bit(0.1, o[2] ^ o[0] ^ o[1]) * _bit(0.1, o[3] ^ o[0])
+    raise ValueError(f"kind must be one of {CONTEMPORANEOUS_MOTIFS}")
+
+
+def contemporaneous_motif(n=4000, kind="xor", seed=None, law=False):
+    """
+    Binary motifs whose interactions all happen within one sample :cite:`Hourican2026`, as
+    independent samples. Every flip has probability 0.1 unless stated.
+
+    * ``'xor'``: ``z = x xor y``; columns (x, y, z).
+    * ``'xor_descendant'``: ``z = x xor y`` and ``w = z``; (x, y, z, w).
+    * ``'or'``: ``z = x or y``; (x, y, z).
+    * ``'chain'``: ``x0 ~ Bernoulli(1/3)``, and each next variable copies the previous; four
+      columns.
+    * ``'independent_baseline'``: ``z = x xor y`` and ``w = y``; (x, y, z, w).
+    * ``'dependent_baseline'``: ``y = x`` (flip 0.2), ``z = x xor y`` and ``w = x``; no DAG
+      is weakly adjacency faithful to it.
+
+    With `law`, the exact distribution is returned instead, as a dit ``Distribution``, for
+    reference families (:func:`infoflow.families.decisions_from_distribution`).
+    """
+    size, weight = _motif(kind)
+    outcomes = list(itertools.product((0, 1), repeat=size))
+    pmf = np.array([weight(o) for o in outcomes])
+    pmf /= pmf.sum()
+    if law:
+        import dit
+
+        return dit.Distribution(outcomes, list(pmf))
+    rng = _rng(seed)
+    return np.array(outcomes)[rng.choice(len(outcomes), size=n, p=pmf)]
 
 
 def common_driver(n=3000, noise=0.05, seed=None):

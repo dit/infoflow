@@ -88,6 +88,49 @@ its level with the larger pool. On null targets it rejected in 5 of 100 with 12 
 (1540 pairs) and in 6 of 100 with 20 processes (4560 pairs). Most of the extra time is
 the full permutation null of a pair that is found.
 
+Synergy and weaker faithfulness
+-------------------------------
+
+:func:`infoflow.benchmarks.synergy_validation` runs the mechanisms of :cite:`Hourican2026`
+(:mod:`infoflow.datasets`):
+
+* lagged XORs at three noise levels;
+* an XOR with a descendant, an asymmetric interaction and an OR;
+* an XOR among 12 processes;
+* the lag-0 motifs of :doc:`families`, whose population families come from their exact laws.
+
+:func:`infoflow.benchmarks.planted_module_validation` plants synthetic modules beside a
+fixed background, as in the paper's neural application. ``validation/synergy.py --planted``
+reports both. The runs use 4000 samples, default settings, 10 replicates and 95%
+Clopper-Pearson intervals:
+
+=============================================  =======  ============
+Check                                          Rate     95% interval
+=============================================  =======  ============
+XOR, flip 0.1 / 0.25 / 0.45: both parents      10 / 10  0.69--1.00
+XOR with a descendant: y from x1 and x2        10 / 10  0.69--1.00
+XOR with a descendant: w from y only           9 / 10   0.55--1.00
+Asymmetric interaction: both parents           10 / 10  0.69--1.00
+OR: both parents                               10 / 10  0.69--1.00
+XOR among 12 processes: both parents           10 / 10  0.69--1.00
+Lag-0 XOR: the population family               9 / 10   0.55--1.00
+Lag-0 XOR with a descendant, OR, chain         10 / 10  0.69--1.00
+Lag-0 independent baseline                     9 / 10   0.55--1.00
+Lag-0 dependent baseline (empty family)        10 / 10  0.69--1.00
+=============================================  =======  ============
+
+Each XOR row holds at all three noise levels, including flip 0.45 (whole-minus-sum
+information 0.007 bits). That is below the 0.3-bit protection rule of
+:cite:`Hourican2026`, which therefore misses it.
+
+With modules planted beside a noisy rule-90 cellular automaton of six cells, every true
+parent was found in all replicates of every module (XOR, XOR with a descendant, OR, and
+independent bits). Every module variable got exactly its parents in 8, 7, 8 and 9 of 10
+replicates. The rest had wrong extra parents, 0.2--0.4 per replicate over three or four
+module variables. That is about what the per-stage levels allow (a greedy step and a pair
+search at 0.05 each per target). Replicates share one background, so they are not
+independent samples of it.
+
 Large networks
 --------------
 
